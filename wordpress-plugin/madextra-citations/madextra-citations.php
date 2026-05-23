@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.7
+ * Version: 0.1.8
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.6';
+        const CAPS_VERSION = '1.0.7';
 
         public static function bootstrap()
         {
@@ -227,7 +227,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         'manage_terms' => 'manage_citation_settings',
                         'edit_terms'   => 'manage_citation_settings',
                         'delete_terms' => 'manage_citation_settings',
-                        'assign_terms' => 'edit_citation_profiles',
+                        'assign_terms' => 'manage_citation_profiles',
                     ),
                 )
             );
@@ -247,7 +247,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         'manage_terms' => 'manage_citation_settings',
                         'edit_terms'   => 'manage_citation_settings',
                         'delete_terms' => 'manage_citation_settings',
-                        'assign_terms' => 'edit_citation_profiles',
+                        'assign_terms' => 'manage_citation_profiles',
                     ),
                 )
             );
@@ -270,20 +270,22 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         private static function cpt_capabilities()
         {
             return array(
-                'edit_post'              => 'edit_citation_profiles',
-                'read_post'              => 'edit_citation_profiles',
-                'delete_post'            => 'delete_citation_profiles',
-                'edit_posts'             => 'edit_citation_profiles',
-                'edit_others_posts'      => 'edit_citation_profiles',
-                'publish_posts'          => 'publish_citation_profiles',
-                'read_private_posts'     => 'edit_citation_profiles',
-                'delete_posts'           => 'delete_citation_profiles',
-                'delete_private_posts'   => 'delete_citation_profiles',
-                'delete_published_posts' => 'delete_citation_profiles',
-                'delete_others_posts'    => 'delete_citation_profiles',
-                'edit_private_posts'     => 'edit_citation_profiles',
-                'edit_published_posts'   => 'edit_citation_profiles',
-                'create_posts'           => 'create_citation_profiles',
+                // Keep admin access tied to one guaranteed capability to prevent
+                // host-specific role/cap collisions on wp-admin post-type screens.
+                'edit_post'              => 'manage_citation_profiles',
+                'read_post'              => 'manage_citation_profiles',
+                'delete_post'            => 'manage_citation_profiles',
+                'edit_posts'             => 'manage_citation_profiles',
+                'edit_others_posts'      => 'manage_citation_profiles',
+                'publish_posts'          => 'manage_citation_profiles',
+                'read_private_posts'     => 'manage_citation_profiles',
+                'delete_posts'           => 'manage_citation_profiles',
+                'delete_private_posts'   => 'manage_citation_profiles',
+                'delete_published_posts' => 'manage_citation_profiles',
+                'delete_others_posts'    => 'manage_citation_profiles',
+                'edit_private_posts'     => 'manage_citation_profiles',
+                'edit_published_posts'   => 'manage_citation_profiles',
+                'create_posts'           => 'manage_citation_profiles',
             );
         }
 
@@ -1142,6 +1144,14 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 return;
             }
 
+            $post_type_object = get_post_type_object(self::CPT);
+            $runtime_edit_posts_cap = $post_type_object && isset($post_type_object->cap->edit_posts)
+                ? (string) $post_type_object->cap->edit_posts
+                : '';
+            $runtime_create_posts_cap = $post_type_object && isset($post_type_object->cap->create_posts)
+                ? (string) $post_type_object->cap->create_posts
+                : '';
+
             $checks = array(
                 'create_citation_profiles' => current_user_can('create_citation_profiles'),
                 'edit_citation_profiles'   => current_user_can('edit_citation_profiles'),
@@ -1149,6 +1159,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'manage_citation_profiles' => current_user_can('manage_citation_profiles'),
                 'edit_posts' => current_user_can('edit_posts'),
                 'manage_options' => current_user_can('manage_options'),
+                'runtime_cpt_edit_posts' => $runtime_edit_posts_cap ? current_user_can($runtime_edit_posts_cap) : false,
+                'runtime_cpt_create_posts' => $runtime_create_posts_cap ? current_user_can($runtime_create_posts_cap) : false,
             );
 
             $parts = array();
