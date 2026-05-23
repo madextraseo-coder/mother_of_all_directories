@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.1';
+        const CAPS_VERSION = '1.0.2';
 
         public static function bootstrap()
         {
@@ -46,6 +46,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
             add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
+            add_filter('user_has_cap', array(__CLASS__, 'grant_admin_fallback_caps'), 10, 4);
 
             add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
             add_shortcode(self::SHORTCODE, array(__CLASS__, 'render_directory_shortcode'));
@@ -74,6 +75,31 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
             self::register_roles_and_capabilities();
             update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
+        }
+
+        public static function grant_admin_fallback_caps($allcaps, $caps, $args, $user)
+        {
+            if (empty($allcaps['manage_options'])) {
+                return $allcaps;
+            }
+
+            $must_have_caps = array_merge(
+                self::action_capabilities(),
+                array_values(self::cpt_capabilities()),
+                array(
+                    'manage_citation_settings',
+                    'manage_terms',
+                    'edit_terms',
+                    'delete_terms',
+                    'assign_terms',
+                )
+            );
+
+            foreach (array_unique($must_have_caps) as $cap) {
+                $allcaps[$cap] = true;
+            }
+
+            return $allcaps;
         }
 
         public static function register_content_types()
