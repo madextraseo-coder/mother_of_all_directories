@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.5
+ * Version: 0.1.6
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.4';
+        const CAPS_VERSION = '1.0.5';
 
         public static function bootstrap()
         {
@@ -46,7 +46,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
             add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
-            add_filter('user_has_cap', array(__CLASS__, 'grant_admin_fallback_caps'), 10, 4);
+            add_filter('user_has_cap', array(__CLASS__, 'grant_admin_fallback_caps'), 99999, 4);
 
             add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
             add_shortcode(self::SHORTCODE, array(__CLASS__, 'render_directory_shortcode'));
@@ -83,6 +83,16 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $is_citation_role = in_array('citation_admin', $roles, true) || in_array('citation_manager', $roles, true);
             $is_trusted_admin_user = !empty($allcaps['manage_options']) || !empty($allcaps['edit_posts']);
             $is_logged_in_user = !empty($allcaps['read']);
+
+            if (!empty($allcaps['manage_citation_profiles'])) {
+                $allcaps['create_citation_profiles'] = true;
+                $allcaps['edit_citation_profiles'] = true;
+                $allcaps['delete_citation_profiles'] = true;
+                $allcaps['publish_citation_profiles'] = true;
+                $allcaps['import_citation_profiles'] = true;
+                $allcaps['export_citation_profiles'] = true;
+                $allcaps['manage_citation_settings'] = true;
+            }
 
             $requested_is_citation = false;
             foreach ((array) $caps as $cap_name) {
@@ -1110,6 +1120,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'edit_citation_profiles'   => current_user_can('edit_citation_profiles'),
                 'publish_citation_profiles' => current_user_can('publish_citation_profiles'),
                 'manage_citation_profiles' => current_user_can('manage_citation_profiles'),
+                'edit_posts' => current_user_can('edit_posts'),
+                'manage_options' => current_user_can('manage_options'),
             );
 
             $parts = array();
