@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -44,6 +44,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_post_mec_export_csv', array(__CLASS__, 'handle_export_request'));
             add_action('admin_post_mec_import_csv', array(__CLASS__, 'handle_import_request'));
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
+            add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
 
             add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
@@ -1038,6 +1039,44 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
             $type = isset($notice['type']) ? sanitize_html_class($notice['type']) : 'success';
             echo '<div class="notice notice-' . esc_attr($type) . ' is-dismissible"><p>' . esc_html($notice['message']) . '</p></div>';
+        }
+
+        public static function render_capability_debug_notice()
+        {
+            if (!is_admin()) {
+                return;
+            }
+
+            if (!isset($_GET['mec_caps_debug']) || '1' !== sanitize_text_field(wp_unslash($_GET['mec_caps_debug']))) {
+                return;
+            }
+
+            if (!current_user_can('manage_options')) {
+                return;
+            }
+
+            $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+            if ($screen && self::CPT !== $screen->post_type && false === strpos((string) $screen->id, 'mec-csv-tools')) {
+                return;
+            }
+
+            $checks = array(
+                'create_citation_profiles' => current_user_can('create_citation_profiles'),
+                'edit_citation_profiles'   => current_user_can('edit_citation_profiles'),
+                'publish_citation_profiles' => current_user_can('publish_citation_profiles'),
+                'manage_citation_profiles' => current_user_can('manage_citation_profiles'),
+            );
+
+            $parts = array();
+            foreach ($checks as $cap => $has_cap) {
+                $parts[] = $cap . ': ' . ($has_cap ? 'yes' : 'no');
+            }
+
+            $add_new_url = admin_url('post-new.php?post_type=' . self::CPT);
+            echo '<div class="notice notice-info"><p><strong>MadExtra Citations Debug:</strong> ';
+            echo esc_html(implode(' | ', $parts));
+            echo ' | <a href="' . esc_url($add_new_url) . '">Open Add New Citation Profile</a>';
+            echo '</p></div>';
         }
 
         private static function redirect_tools_page()
