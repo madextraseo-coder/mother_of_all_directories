@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.2';
+        const CAPS_VERSION = '1.0.3';
 
         public static function bootstrap()
         {
@@ -79,7 +79,11 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
         public static function grant_admin_fallback_caps($allcaps, $caps, $args, $user)
         {
-            if (empty($allcaps['manage_options'])) {
+            $roles = isset($user->roles) && is_array($user->roles) ? $user->roles : array();
+            $is_citation_role = in_array('citation_admin', $roles, true) || in_array('citation_manager', $roles, true);
+            $is_trusted_admin_user = !empty($allcaps['manage_options']) || !empty($allcaps['edit_posts']);
+
+            if (!$is_citation_role && !$is_trusted_admin_user) {
                 return $allcaps;
             }
 
