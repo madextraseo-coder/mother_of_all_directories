@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://delray.madextraseo.com/sitemap.xml

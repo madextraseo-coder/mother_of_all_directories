@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delray Visual Dashboard</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --line: #d9dfec;
+      --ink: #162135;
+      --muted: #5a6783;
+      --accent: #0f7df7;
+      --accent-soft: #eaf3ff;
+      --radius: 12px;
+      --shadow: 0 10px 28px rgba(15, 34, 66, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: radial-gradient(circle at 0% 0%, #ffffff, var(--bg) 42%);
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+
+    .layout {
+      min-height: 100%;
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .panel, .preview-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-head, .preview-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff, #f9fbff);
+    }
+
+    .panel-head h1, .preview-head h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .panel-head p, .preview-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .controls {
+      padding: 14px;
+      overflow: auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    fieldset {
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fcfdff;
+    }
+
+    legend {
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 6px;
+      font-size: 0.88rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #30415f;
+      margin-bottom: 6px;
+    }
+
+    .field + .field { margin-top: 10px; }
+
+    input[type="text"],
+    input[type="url"],
+    textarea {
+      width: 100%;
+      border: 1px solid #c8d3eb;
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    input[type="range"] { width: 100%; }
+    .range-note {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 4px;
+    }
+
+    .actions {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line);
+      background: #f8faff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid #b8c9e9;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: transform .12s ease, border-color .12s ease, background .12s ease;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #1582f8, #0f66d7);
+      border-color: #0f66d7;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+
+    .status {
+      font-size: 0.82rem;
+      color: var(--muted);
+      min-height: 1.2em;
+    }
+
+    .preview-wrap {
+      min-height: calc(100vh - 32px);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .preview-path {
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      border: 1px solid #d2e3ff;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+      flex: 1;
+    }
+
+    @media (max-width: 1060px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .preview-wrap {
+        min-height: 72vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel">
+      <div class="panel-head">
+        <h1>Delray Visual Editor</h1>
+        <p>Edit with controls, preview instantly, then download the updated HTML.</p>
+      </div>
+
+      <div class="controls">
+        <fieldset>
+          <legend>Hero</legend>
+          <div class="field">
+            <label for="heroKicker">Kicker</label>
+            <input id="heroKicker" type="text">
+          </div>
+          <div class="field">
+            <label for="heroH1">H1 Heading</label>
+            <textarea id="heroH1"></textarea>
+          </div>
+          <div class="field">
+            <label for="heroCopy">Hero Copy</label>
+            <textarea id="heroCopy"></textarea>
+          </div>
+          <div class="field">
+            <label for="h1Size">H1 Size</label>
+            <input id="h1Size" type="range" min="1.9" max="5.6" step="0.05">
+            <div class="range-note">Current: <span id="h1SizeValue"></span></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Proof Section</legend>
+          <div class="field">
+            <label for="proofHeading">Proof Heading</label>
+            <textarea id="proofHeading"></textarea>
+          </div>
+          <div class="field">
+            <label for="proofIntro">Proof Intro</label>
+            <textarea id="proofIntro"></textarea>
+          </div>
+          <div class="field">
+            <label for="trustOne">Blue Box 1</label>
+            <input id="trustOne" type="text">
+          </div>
+          <div class="field">
+            <label for="trustTwo">Blue Box 2</label>
+            <input id="trustTwo" type="text">
+          </div>
+          <div class="field">
+            <label for="trustThree">Blue Box 3</label>
+            <input id="trustThree" type="text">
+          </div>
+          <div class="field">
+            <label for="proofCaptionOne">Proof Caption 1</label>
+            <textarea id="proofCaptionOne"></textarea>
+          </div>
+          <div class="field">
+            <label for="proofCaptionTwo">Proof Caption 2</label>
+            <textarea id="proofCaptionTwo"></textarea>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Offer + CTA</legend>
+          <div class="field">
+            <label for="offerLead">Offer Lead Text</label>
+            <textarea id="offerLead"></textarea>
+          </div>
+          <div class="field">
+            <label for="priceTag">Price Tag</label>
+            <input id="priceTag" type="text">
+          </div>
+          <div class="field">
+            <label for="priceParagraph">Price Paragraph</label>
+            <textarea id="priceParagraph"></textarea>
+          </div>
+          <div class="field">
+            <label for="bookingUrl">Booking URL (all CTA buttons)</label>
+            <input id="bookingUrl" type="url">
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="actions">
+        <div class="btn-row">
+          <button id="reloadBtn" type="button">Reload Source</button>
+          <button id="resetBtn" type="button">Reset Changes</button>
+        </div>
+        <button id="saveDraftBtn" type="button">Save Draft</button>
+        <button id="loadDraftBtn" type="button">Load Draft</button>
+        <button id="downloadBtn" class="primary" type="button">Download Updated HTML</button>
+        <div class="status" id="statusText"></div>
+      </div>
+    </aside>
+
+    <section class="preview-wrap">
+      <div class="preview-head">
+        <div>
+          <h2>Live Preview</h2>
+          <p>This preview updates as you type.</p>
+        </div>
+        <div class="preview-path" id="previewPath"></div>
+      </div>
+      <iframe id="previewFrame" title="Delray page preview"></iframe>
+    </section>
+  </div>
+
+  <script>
+    const SOURCE_PATH = "../locations/delray-beach/salon-suite-seo/index.html";
+    const DRAFT_KEY = "delray-visual-draft-v1";
+
+    const controls = {
+      heroKicker: document.getElementById("heroKicker"),
+      heroH1: document.getElementById("heroH1"),
+      heroCopy: document.getElementById("heroCopy"),
+      h1Size: document.getElementById("h1Size"),
+      h1SizeValue: document.getElementById("h1SizeValue"),
+      proofHeading: document.getElementById("proofHeading"),
+      proofIntro: document.getElementById("proofIntro"),
+      trustOne: document.getElementById("trustOne"),
+      trustTwo: document.getElementById("trustTwo"),
+      trustThree: document.getElementById("trustThree"),
+      proofCaptionOne: document.getElementById("proofCaptionOne"),
+      proofCaptionTwo: document.getElementById("proofCaptionTwo"),
+      offerLead: document.getElementById("offerLead"),
+      priceTag: document.getElementById("priceTag"),
+      priceParagraph: document.getElementById("priceParagraph"),
+      bookingUrl: document.getElementById("bookingUrl"),
+      previewFrame: document.getElementById("previewFrame"),
+      previewPath: document.getElementById("previewPath"),
+      statusText: document.getElementById("statusText"),
+      reloadBtn: document.getElementById("reloadBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+      saveDraftBtn: document.getElementById("saveDraftBtn"),
+      loadDraftBtn: document.getElementById("loadDraftBtn"),
+      downloadBtn: document.getElementById("downloadBtn")
+    };
+
+    let sourceHtml = "";
+    let workingDoc = null;
+
+    function setStatus(text, isError) {
+      controls.statusText.textContent = text;
+      controls.statusText.style.color = isError ? "#c23030" : "#5a6783";
+    }
+
+    function q(selector) {
+      return workingDoc ? workingDoc.querySelector(selector) : null;
+    }
+
+    function qa(selector) {
+      return workingDoc ? Array.from(workingDoc.querySelectorAll(selector)) : [];
+    }
+
+    function getText(selector, fallback = "") {
+      const el = q(selector);
+      return el ? el.textContent.trim() : fallback;
+    }
+
+    function setText(selector, value) {
+      const el = q(selector);
+      if (el) {
+        el.textContent = value;
+      }
+    }
+
+    function syncH1SizeLabel() {
+      controls.h1SizeValue.textContent = controls.h1Size.value + "rem";
+    }
+
+    function hydrateControlsFromDoc() {
+      controls.heroKicker.value = getText(".hero .kicker");
+      controls.heroH1.value = getText(".hero h1");
+      controls.heroCopy.value = getText(".hero-copy");
+
+      const h1 = q(".hero h1");
+      const h1Style = h1 ? h1.style.fontSize : "";
+      controls.h1Size.value = h1Style && h1Style.endsWith("rem") ? parseFloat(h1Style) : 2.2;
+      syncH1SizeLabel();
+
+      controls.proofHeading.value = getText("#proof .section-head h2");
+      controls.proofIntro.value = getText("#proof .section-head > p");
+
+      const pills = qa("#proof .trust-pill");
+      controls.trustOne.value = pills[0] ? pills[0].textContent.trim() : "";
+      controls.trustTwo.value = pills[1] ? pills[1].textContent.trim() : "";
+      controls.trustThree.value = pills[2] ? pills[2].textContent.trim() : "";
+
+      controls.proofCaptionOne.value = getText("#proof .proof-shot:nth-of-type(1) p");
+      controls.proofCaptionTwo.value = getText("#proof .proof-shot:nth-of-type(2) p");
+
+      controls.offerLead.value = getText("#offer .lead");
+      controls.priceTag.value = getText("#offer .price-tag");
+      controls.priceParagraph.value = getText("#offer .price-panel > p");
+
+      const firstCta = q("a.button[href^='http']");
+      controls.bookingUrl.value = firstCta ? firstCta.getAttribute("href") : "";
+    }
+
+    function applyControlsToDoc() {
+      if (!workingDoc) return;
+
+      setText(".hero .kicker", controls.heroKicker.value);
+      setText(".hero h1", controls.heroH1.value);
+      setText(".hero-copy", controls.heroCopy.value);
+
+      const h1 = q(".hero h1");
+      if (h1) {
+        h1.style.fontSize = controls.h1Size.value + "rem";
+      }
+
+      setText("#proof .section-head h2", controls.proofHeading.value);
+      setText("#proof .section-head > p", controls.proofIntro.value);
+
+      const pills = qa("#proof .trust-pill");
+      if (pills[0]) pills[0].textContent = controls.trustOne.value;
+      if (pills[1]) pills[1].textContent = controls.trustTwo.value;
+      if (pills[2]) pills[2].textContent = controls.trustThree.value;
+
+      setText("#proof .proof-shot:nth-of-type(1) p", controls.proofCaptionOne.value);
+      setText("#proof .proof-shot:nth-of-type(2) p", controls.proofCaptionTwo.value);
+
+      setText("#offer .lead", controls.offerLead.value);
+      setText("#offer .price-tag", controls.priceTag.value);
+      setText("#offer .price-panel > p", controls.priceParagraph.value);
+
+      const allButtons = qa("a.button[href]");
+      allButtons.forEach((btn) => {
+        if (controls.bookingUrl.value.trim()) {
+          btn.setAttribute("href", controls.bookingUrl.value.trim());
+        }
+      });
+    }
+
+    function renderPreview() {
+      if (!workingDoc) return;
+
+      const html = "<!doctype html>\n" + workingDoc.documentElement.outerHTML;
+      controls.previewFrame.srcdoc = html;
+    }
+
+    async function loadSource() {
+      try {
+        const response = await fetch(SOURCE_PATH, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to load source page.");
+        }
+        sourceHtml = await response.text();
+        workingDoc = new DOMParser().parseFromString(sourceHtml, "text/html");
+        hydrateControlsFromDoc();
+        applyControlsToDoc();
+        renderPreview();
+        setStatus("Source page loaded.");
+      } catch (error) {
+        setStatus("Could not load source. Serve this folder with a local web server and retry.", true);
+      }
+    }
+
+    function resetFromSource() {
+      if (!sourceHtml) return;
+      workingDoc = new DOMParser().parseFromString(sourceHtml, "text/html");
+      hydrateControlsFromDoc();
+      applyControlsToDoc();
+      renderPreview();
+      setStatus("Changes reset to source file.");
+    }
+
+    function saveDraft() {
+      const payload = {};
+      Object.keys(controls).forEach((key) => {
+        const el = controls[key];
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+          payload[key] = el.value;
+        }
+      });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+      setStatus("Draft saved in this browser.");
+    }
+
+    function loadDraft() {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) {
+        setStatus("No saved draft found.", true);
+        return;
+      }
+      const data = JSON.parse(raw);
+      Object.keys(data).forEach((key) => {
+        const el = controls[key];
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+          el.value = data[key];
+        }
+      });
+      syncH1SizeLabel();
+      applyControlsToDoc();
+      renderPreview();
+      setStatus("Draft loaded.");
+    }
+
+    function downloadUpdatedHtml() {
+      applyControlsToDoc();
+      const html = "<!doctype html>\n" + workingDoc.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "delray-index.updated.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus("Updated HTML downloaded.");
+    }
+
+    function wireAutoApply() {
+      const inputs = document.querySelectorAll("input, textarea");
+      inputs.forEach((input) => {
+        input.addEventListener("input", () => {
+          syncH1SizeLabel();
+          applyControlsToDoc();
+          renderPreview();
+        });
+      });
+    }
+
+    controls.previewPath.textContent = SOURCE_PATH;
+    controls.reloadBtn.addEventListener("click", loadSource);
+    controls.resetBtn.addEventListener("click", resetFromSource);
+    controls.saveDraftBtn.addEventListener("click", saveDraft);
+    controls.loadDraftBtn.addEventListener("click", loadDraft);
+    controls.downloadBtn.addEventListener("click", downloadUpdatedHtml);
+
+    wireAutoApply();
+    loadSource();
+  </script>
+</body>
+</html>
