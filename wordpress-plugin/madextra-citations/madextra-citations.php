@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.6
+ * Version: 0.1.7
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.5';
+        const CAPS_VERSION = '1.0.6';
 
         public static function bootstrap()
         {
@@ -46,6 +46,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
             add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
+            add_filter('map_meta_cap', array(__CLASS__, 'map_citation_caps'), 99999, 4);
             add_filter('user_has_cap', array(__CLASS__, 'grant_admin_fallback_caps'), 99999, 4);
 
             add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
@@ -134,6 +135,32 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             }
 
             return $allcaps;
+        }
+
+        public static function map_citation_caps($caps, $cap, $user_id, $args)
+        {
+            $citation_caps = array(
+                'edit_citation_profiles',
+                'create_citation_profiles',
+                'delete_citation_profiles',
+                'publish_citation_profiles',
+                'read_private_citation_profiles',
+                'edit_private_citation_profiles',
+                'edit_published_citation_profiles',
+                'edit_others_citation_profiles',
+                'delete_private_citation_profiles',
+                'delete_published_citation_profiles',
+                'delete_others_citation_profiles',
+                'edit_citation_profile',
+                'delete_citation_profile',
+                'read_citation_profile',
+            );
+
+            if (in_array($cap, $citation_caps, true)) {
+                return array('manage_citation_profiles');
+            }
+
+            return $caps;
         }
 
         public static function register_content_types()
