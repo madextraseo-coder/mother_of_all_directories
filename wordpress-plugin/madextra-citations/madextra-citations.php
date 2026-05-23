@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.4
+ * Version: 0.1.5
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.3';
+        const CAPS_VERSION = '1.0.4';
 
         public static function bootstrap()
         {
@@ -82,8 +82,28 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $roles = isset($user->roles) && is_array($user->roles) ? $user->roles : array();
             $is_citation_role = in_array('citation_admin', $roles, true) || in_array('citation_manager', $roles, true);
             $is_trusted_admin_user = !empty($allcaps['manage_options']) || !empty($allcaps['edit_posts']);
+            $is_logged_in_user = !empty($allcaps['read']);
 
-            if (!$is_citation_role && !$is_trusted_admin_user) {
+            $requested_is_citation = false;
+            foreach ((array) $caps as $cap_name) {
+                if (is_string($cap_name) && false !== strpos($cap_name, 'citation_')) {
+                    $requested_is_citation = true;
+                    break;
+                }
+            }
+            if (!$requested_is_citation && isset($args[0]) && is_string($args[0]) && false !== strpos($args[0], 'citation_')) {
+                $requested_is_citation = true;
+            }
+            if (
+                !$requested_is_citation &&
+                is_admin() &&
+                isset($_GET['post_type']) &&
+                self::CPT === sanitize_key(wp_unslash($_GET['post_type']))
+            ) {
+                $requested_is_citation = true;
+            }
+
+            if (!$is_citation_role && !$is_trusted_admin_user && !($is_logged_in_user && $requested_is_citation)) {
                 return $allcaps;
             }
 
@@ -1082,11 +1102,6 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             }
 
             if (!current_user_can('manage_options')) {
-                return;
-            }
-
-            $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-            if ($screen && self::CPT !== $screen->post_type && false === strpos((string) $screen->id, 'mec-csv-tools')) {
                 return;
             }
 
