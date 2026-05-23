@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -26,6 +26,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NONCE_IMPORT = 'mec_import_nonce';
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
+        const CAPS_OPTION = 'mec_caps_version';
+        const CAPS_VERSION = '1.0.1';
 
         public static function bootstrap()
         {
@@ -42,6 +44,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_post_mec_export_csv', array(__CLASS__, 'handle_export_request'));
             add_action('admin_post_mec_import_csv', array(__CLASS__, 'handle_import_request'));
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
+            add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
 
             add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
             add_shortcode(self::SHORTCODE, array(__CLASS__, 'render_directory_shortcode'));
@@ -51,6 +54,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         {
             self::register_content_types();
             self::register_roles_and_capabilities();
+            update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
             self::maybe_create_directory_page();
             flush_rewrite_rules();
         }
@@ -58,6 +62,17 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         public static function deactivate()
         {
             flush_rewrite_rules();
+        }
+
+        public static function maybe_sync_capabilities()
+        {
+            $version = get_option(self::CAPS_OPTION, '');
+            if (self::CAPS_VERSION === (string) $version) {
+                return;
+            }
+
+            self::register_roles_and_capabilities();
+            update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
         }
 
         public static function register_content_types()
