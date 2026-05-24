@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -27,7 +27,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.7';
+        const CAPS_VERSION = '1.0.8';
 
         public static function bootstrap()
         {
@@ -343,6 +343,27 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             if ($administrator) {
                 foreach (array_unique(array_merge($admin_caps, $cpt_caps)) as $cap) {
                     $administrator->add_cap($cap);
+                }
+            }
+
+            // Ensure any true admin-style role (including custom host roles)
+            // receives citation capabilities without requiring dual-role assignment.
+            $roles_object = wp_roles();
+            if ($roles_object instanceof WP_Roles && !empty($roles_object->roles)) {
+                foreach ($roles_object->roles as $role_slug => $role_data) {
+                    $has_manage_options = !empty($role_data['capabilities']['manage_options']);
+                    if (!$has_manage_options) {
+                        continue;
+                    }
+
+                    $role = get_role($role_slug);
+                    if (!$role) {
+                        continue;
+                    }
+
+                    foreach (array_unique(array_merge($admin_caps, $cpt_caps)) as $cap) {
+                        $role->add_cap($cap);
+                    }
                 }
             }
         }
@@ -1179,6 +1200,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'edit_citation_profiles'   => current_user_can('edit_citation_profiles'),
                 'publish_citation_profiles' => current_user_can('publish_citation_profiles'),
                 'manage_citation_profiles' => current_user_can('manage_citation_profiles'),
+                'manage_citation_builder' => current_user_can('manage_citation_builder'),
                 'edit_posts' => current_user_can('edit_posts'),
                 'manage_options' => current_user_can('manage_options'),
                 'runtime_cpt_edit_posts' => $runtime_edit_posts_cap ? current_user_can($runtime_edit_posts_cap) : false,

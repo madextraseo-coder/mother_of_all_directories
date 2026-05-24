@@ -8,7 +8,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
     {
         const STORE_OPTION = 'mec_builder_store_v1';
         const CAPS_OPTION = 'mec_builder_caps_version';
-        const CAPS_VERSION = '1.0.0';
+        const CAPS_VERSION = '1.0.1';
 
         const NONCE_BUILDER = 'mec_builder_nonce';
         const NONCE_DASHBOARD = 'mec_dashboard_nonce';
@@ -98,6 +98,27 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 }
                 foreach ($caps as $cap) {
                     $role->add_cap($cap);
+                }
+            }
+
+            // Also grant builder caps to any custom admin-like role that has
+            // manage_options, so users do not need both admin + citation roles.
+            $roles_object = wp_roles();
+            if ($roles_object instanceof WP_Roles && !empty($roles_object->roles)) {
+                foreach ($roles_object->roles as $role_slug => $role_data) {
+                    $has_manage_options = !empty($role_data['capabilities']['manage_options']);
+                    if (!$has_manage_options) {
+                        continue;
+                    }
+
+                    $role = get_role($role_slug);
+                    if (!$role) {
+                        continue;
+                    }
+
+                    foreach ($admin_caps as $cap) {
+                        $role->add_cap($cap);
+                    }
                 }
             }
 
