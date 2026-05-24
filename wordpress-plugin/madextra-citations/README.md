@@ -2,6 +2,32 @@
 
 Custom WordPress plugin for `directory.madextraseo.com` to manage citation profiles visually in wp-admin and publish a public citations directory at `/citations/`.
 
+## JetEngine-Style Builder Layer (v0.2+)
+
+This plugin now includes a modular builder layer to support a JetEngine-style dynamic workflow:
+
+- `Citations Builder` admin area under `Citation Profiles`
+- Builder entities:
+  - `field_groups`
+  - `templates`
+  - `queries`
+  - `forms`
+  - `relations`
+- Dynamic fields assignable to:
+  - `citation_profile`
+  - `citation_market`
+  - `citation_service`
+  - `user`
+- Frontend profile dashboard shortcode:
+  - `[mec_profile_dashboard]`
+- Dynamic listing + filter shortcodes:
+  - `[mec_listing template="default-table" query="all-profiles"]`
+  - `[mec_filters query="all-profiles"]`
+- Elementor widgets:
+  - `MEC Listing`
+  - `MEC Dynamic Field`
+  - `MEC Filters`
+
 ## What This Includes
 
 - Custom post type: `citation_profile`
@@ -17,6 +43,12 @@ Custom WordPress plugin for `directory.madextraseo.com` to manage citation profi
   - `import_citation_profiles`
   - `export_citation_profiles`
   - `manage_citation_settings`
+  - `manage_citation_builder`
+  - `manage_citation_templates`
+  - `manage_citation_queries`
+  - `manage_citation_forms`
+  - `manage_citation_relations`
+  - `submit_citation_profiles`
 - Default roles created on activation:
   - `Citation Manager`
   - `Citation Admin`
@@ -26,6 +58,14 @@ Custom WordPress plugin for `directory.madextraseo.com` to manage citation profi
   - `GET /wp-json/madextra-citations/v1/profiles`
   - `POST /wp-json/madextra-citations/v1/import`
   - `GET /wp-json/madextra-citations/v1/export`
+  - `GET|POST /wp-json/madextra-citations/v1/field-groups`
+  - `GET|POST /wp-json/madextra-citations/v1/templates`
+  - `GET|POST /wp-json/madextra-citations/v1/queries`
+  - `GET|POST /wp-json/madextra-citations/v1/forms`
+  - `GET|POST /wp-json/madextra-citations/v1/relations`
+  - `GET|PUT|DELETE /wp-json/madextra-citations/v1/{entity}/{id}`
+  - `POST /wp-json/madextra-citations/v1/profiles`
+  - `PUT|DELETE /wp-json/madextra-citations/v1/profiles/{id}`
 - Public grouped directory shortcode:
   - `[madextra_citations_directory]`
 
@@ -81,6 +121,7 @@ For multiple values in `market` or `service`, separate with `|` or `,`.
 
 - `Citation Manager` can create/edit/publish/delete/import/export profiles.
 - `Citation Admin` includes all manager permissions plus `manage_citation_settings` for taxonomy/settings control.
+- Builder capabilities are auto-synced to `Citation Manager`, `Citation Admin`, and `Administrator` on activation/admin init.
 - Administrators receive all plugin capabilities on activation.
 
 ## REST Examples

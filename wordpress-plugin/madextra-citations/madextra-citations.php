@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.1.8
+ * Version: 0.2.0
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -264,6 +264,12 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'import_citation_profiles',
                 'export_citation_profiles',
                 'manage_citation_settings',
+                'manage_citation_builder',
+                'manage_citation_templates',
+                'manage_citation_queries',
+                'manage_citation_forms',
+                'manage_citation_relations',
+                'submit_citation_profiles',
             );
         }
 
@@ -1671,7 +1677,18 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
     }
 }
 
+$mec_builder_file = __DIR__ . '/includes/class-mec-builder.php';
+if (file_exists($mec_builder_file)) {
+    require_once $mec_builder_file;
+}
+
 MadExtra_Citations_Plugin::bootstrap();
+if (class_exists('MadExtra_Citations_Builder')) {
+    MadExtra_Citations_Builder::bootstrap();
+}
 
 register_activation_hook(__FILE__, array('MadExtra_Citations_Plugin', 'activate'));
+if (class_exists('MadExtra_Citations_Builder')) {
+    register_activation_hook(__FILE__, array('MadExtra_Citations_Builder', 'activate'));
+}
 register_deactivation_hook(__FILE__, array('MadExtra_Citations_Plugin', 'deactivate'));
