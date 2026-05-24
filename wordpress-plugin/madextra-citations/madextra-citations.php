@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and searchable public directory pages.
- * Version: 0.6.1
+ * Version: 0.6.2
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -57,6 +57,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const CAPS_OPTION = 'mec_caps_version';
         const CAPS_VERSION = '1.2.0';
         const PUBLIC_SUBMIT_SHORTCODE = 'mec_public_submit_form';
+        const STRIPE_RETURN_SHORTCODE = 'mec_stripe_return';
         const LOGO_MAX_BYTES = 2097152;
         const STRIPE_OPTION = 'mec_stripe_settings_v1';
         const STRIPE_WEBHOOK_TOLERANCE = 300;
@@ -97,6 +98,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_shortcode(self::SHORTCODE, array(__CLASS__, 'render_directory_shortcode'));
             add_shortcode(self::PROFILE_SHORTCODE, array(__CLASS__, 'render_public_profile_shortcode'));
             add_shortcode(self::PUBLIC_SUBMIT_SHORTCODE, array(__CLASS__, 'render_public_submit_form_shortcode'));
+            add_shortcode(self::STRIPE_RETURN_SHORTCODE, array(__CLASS__, 'render_stripe_return_shortcode'));
         }
 
         public static function activate()
@@ -107,6 +109,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             self::maybe_seed_stripe_settings();
             self::maybe_create_directory_page();
             self::maybe_create_public_submit_page();
+            self::maybe_create_stripe_return_page();
             flush_rewrite_rules();
         }
 
@@ -125,6 +128,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             self::register_roles_and_capabilities();
             self::maybe_seed_stripe_settings();
             self::maybe_create_public_submit_page();
+            self::maybe_create_stripe_return_page();
             update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
         }
 
@@ -454,6 +458,64 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             );
         }
 
+        private static function maybe_create_stripe_return_page()
+        {
+            $settings = self::get_stripe_settings();
+            $slug = !empty($settings['return_page_slug']) ? sanitize_title($settings['return_page_slug']) : 'payment-complete';
+            $existing = get_page_by_path($slug);
+            if ($existing) {
+                return;
+            }
+
+            wp_insert_post(
+                array(
+                    'post_type'    => 'page',
+                    'post_status'  => 'publish',
+                    'post_title'   => 'Payment Complete',
+                    'post_name'    => $slug,
+                    'post_content' => '[' . self::STRIPE_RETURN_SHORTCODE . ']',
+                )
+            );
+        }
+
+        private static function stripe_return_page_url($session_id = '')
+        {
+            $settings = self::get_stripe_settings();
+            $slug = !empty($settings['return_page_slug']) ? sanitize_title($settings['return_page_slug']) : 'payment-complete';
+            $page = get_page_by_path($slug);
+            $base = $page instanceof WP_Post ? get_permalink($page) : home_url('/' . $slug . '/');
+            if ('' !== (string) $session_id) {
+                return add_query_arg('session_id', (string) $session_id, $base);
+            }
+            $separator = false === strpos($base, '?') ? '?' : '&';
+            return $base . $separator . 'session_id={CHECKOUT_SESSION_ID}';
+        }
+
+        private static function find_profile_by_checkout_session($session_id)
+        {
+            $session_id = sanitize_text_field((string) $session_id);
+            if ('' === $session_id) {
+                return 0;
+            }
+
+            $query = new WP_Query(
+                array(
+                    'post_type'      => self::CPT,
+                    'post_status'    => array('publish', 'draft', 'pending', 'private'),
+                    'posts_per_page' => 1,
+                    'fields'         => 'ids',
+                    'meta_query'     => array(
+                        array(
+                            'key'   => self::META_PREFIX . 'self_serve_checkout_session_id',
+                            'value' => $session_id,
+                        ),
+                    ),
+                )
+            );
+
+            return !empty($query->posts[0]) ? (int) $query->posts[0] : 0;
+        }
+
         private static function default_stripe_settings()
         {
             return array(
@@ -462,6 +524,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'auto_publish_paid_profiles' => '1',
                 'auto_generate_public_page' => '1',
                 'auto_upgrade_to_premium' => '1',
+                'return_page_slug' => 'payment-complete',
             );
         }
 
@@ -1942,6 +2005,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
             $settings = self::get_stripe_settings();
             $webhook_url = rest_url('madextra-citations/v1/stripe/webhook');
+            $return_url = self::stripe_return_page_url();
             ?>
             <div class="wrap">
                 <h1><?php esc_html_e('Stripe Settings', 'madextra-citations'); ?></h1>
@@ -1980,6 +2044,13 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                             <td>
                                 <code><?php echo esc_html($webhook_url); ?></code>
                                 <p class="description"><?php esc_html_e('Add this URL in Stripe and listen for checkout.session.completed and checkout.session.async_payment_succeeded.', 'madextra-citations'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Stripe Return URL', 'madextra-citations'); ?></th>
+                            <td>
+                                <code><?php echo esc_html($return_url); ?></code>
+                                <p class="description"><?php esc_html_e('Set each Stripe Payment Link to redirect here after payment so buyers land on their claimed premium profile page.', 'madextra-citations'); ?></p>
                             </td>
                         </tr>
                     </table>
@@ -3701,6 +3772,72 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     .mec-public-grid { grid-template-columns:1fr; }
                 }
             </style>
+            <?php
+            return ob_get_clean();
+        }
+
+        public static function render_stripe_return_shortcode($atts)
+        {
+            $session_id = isset($_GET['session_id']) ? sanitize_text_field(wp_unslash($_GET['session_id'])) : '';
+            $attempt = isset($_GET['mec_attempt']) ? max(0, (int) $_GET['mec_attempt']) : 0;
+
+            if ('' === $session_id) {
+                return '<p>' . esc_html__('Payment received. We are preparing your profile page now.', 'madextra-citations') . '</p>';
+            }
+
+            $profile_id = self::find_profile_by_checkout_session($session_id);
+            if ($profile_id > 0) {
+                $profile = self::profile_to_public_data($profile_id);
+                if (empty($profile['public_profile_page_url'])) {
+                    $page_id = self::generate_public_profile_page($profile_id);
+                    if (!is_wp_error($page_id)) {
+                        $profile = self::profile_to_public_data($profile_id);
+                    }
+                }
+
+                if (!empty($profile['public_profile_page_url'])) {
+                    $target = esc_url($profile['public_profile_page_url']);
+                    ob_start();
+                    ?>
+                    <div class="mec-stripe-return">
+                        <h2><?php esc_html_e('Payment Confirmed', 'madextra-citations'); ?></h2>
+                        <p><?php esc_html_e('Your premium profile is ready. Redirecting you now.', 'madextra-citations'); ?></p>
+                        <p><a class="mec-public-button" href="<?php echo $target; ?>"><?php esc_html_e('Open Your Profile Page', 'madextra-citations'); ?></a></p>
+                    </div>
+                    <script>
+                        window.setTimeout(function () {
+                            window.location.href = <?php echo wp_json_encode($target); ?>;
+                        }, 1200);
+                    </script>
+                    <?php
+                    return ob_get_clean();
+                }
+            }
+
+            $retry_url = add_query_arg(
+                array(
+                    'session_id' => $session_id,
+                    'mec_attempt' => $attempt + 1,
+                ),
+                remove_query_arg(array('mec_attempt'))
+            );
+
+            ob_start();
+            ?>
+            <div class="mec-stripe-return">
+                <h2><?php esc_html_e('Finishing Your Profile Setup', 'madextra-citations'); ?></h2>
+                <p><?php esc_html_e('Your payment was accepted. We are waiting for Stripe to finish syncing your claimed profile.', 'madextra-citations'); ?></p>
+                <?php if ($attempt < 10) : ?>
+                    <p><?php esc_html_e('This page will refresh automatically in a few seconds.', 'madextra-citations'); ?></p>
+                    <script>
+                        window.setTimeout(function () {
+                            window.location.href = <?php echo wp_json_encode($retry_url); ?>;
+                        }, 3000);
+                    </script>
+                <?php else : ?>
+                    <p><?php esc_html_e('If this page does not redirect shortly, refresh once or contact support.', 'madextra-citations'); ?></p>
+                <?php endif; ?>
+            </div>
             <?php
             return ob_get_clean();
         }
