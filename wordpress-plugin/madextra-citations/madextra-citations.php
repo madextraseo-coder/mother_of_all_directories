@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.2.4
+ * Version: 0.2.5
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -53,7 +53,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.0.8';
+        const CAPS_VERSION = '1.0.9';
 
         public static function bootstrap()
         {
@@ -69,6 +69,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_menu', array(__CLASS__, 'register_tools_submenu'));
             add_action('admin_post_mec_export_csv', array(__CLASS__, 'handle_export_request'));
             add_action('admin_post_mec_import_csv', array(__CLASS__, 'handle_import_request'));
+            add_action('admin_init', array(__CLASS__, 'maybe_redirect_legacy_tools_page'));
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
             add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
@@ -767,31 +768,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'edit.php?post_type=' . self::CPT,
                 __('Citation CSV Tools', 'madextra-citations'),
                 __('CSV Tools', 'madextra-citations'),
-                'manage_citation_profiles',
+                'read',
                 'mec-csv-tools',
                 array(__CLASS__, 'render_tools_page')
-            );
-
-            // Fallback entry for users who can access the builder stack but were
-            // not granted legacy manage_citation_profiles capability yet.
-            add_submenu_page(
-                'edit.php?post_type=' . self::CPT,
-                __('Citation CSV Tools', 'madextra-citations'),
-                __('CSV Tools (Builder)', 'madextra-citations'),
-                'manage_citation_builder',
-                'mec-csv-tools-builder',
-                array(__CLASS__, 'redirect_tools_page')
             );
         }
 
         public static function render_tools_page()
         {
-            if (
-                !current_user_can('manage_citation_profiles') &&
-                !current_user_can('import_citation_profiles') &&
-                !current_user_can('export_citation_profiles') &&
-                !current_user_can('manage_citation_builder')
-            ) {
+            if (!self::can_access_tools_page()) {
                 wp_die(esc_html__('You do not have permission to view this page.', 'madextra-citations'));
             }
 
@@ -860,7 +845,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
         public static function handle_export_request()
         {
-            if (!current_user_can('export_citation_profiles')) {
+            if (!self::can_export_profiles()) {
                 wp_die(esc_html__('You do not have permission to export citation profiles.', 'madextra-citations'));
             }
 
@@ -908,7 +893,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
         public static function handle_import_request()
         {
-            if (!current_user_can('import_citation_profiles')) {
+            if (!self::can_import_profiles()) {
                 wp_die(esc_html__('You do not have permission to import citation profiles.', 'madextra-citations'));
             }
 
@@ -1259,6 +1244,48 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             exit;
         }
 
+        public static function maybe_redirect_legacy_tools_page()
+        {
+            if (!is_admin() || !current_user_can('read')) {
+                return;
+            }
+
+            $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+            if ('mec-csv-tools-builder' !== $page) {
+                return;
+            }
+
+            self::redirect_tools_page();
+        }
+
+        private static function has_admin_fallback()
+        {
+            return current_user_can('manage_options') || current_user_can('manage_network_options');
+        }
+
+        private static function can_access_tools_page()
+        {
+            return self::has_admin_fallback()
+                || current_user_can('manage_citation_profiles')
+                || current_user_can('import_citation_profiles')
+                || current_user_can('export_citation_profiles')
+                || current_user_can('manage_citation_builder');
+        }
+
+        private static function can_import_profiles()
+        {
+            return self::has_admin_fallback()
+                || current_user_can('import_citation_profiles')
+                || current_user_can('manage_citation_profiles');
+        }
+
+        private static function can_export_profiles()
+        {
+            return self::has_admin_fallback()
+                || current_user_can('export_citation_profiles')
+                || current_user_can('manage_citation_profiles');
+        }
+
         private static function collect_profile_rows(array $filters = array())
         {
             $query_args = array(
@@ -1343,7 +1370,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'methods'             => WP_REST_Server::CREATABLE,
                     'callback'            => array(__CLASS__, 'rest_import_profiles'),
                     'permission_callback' => function () {
-                        return current_user_can('import_citation_profiles');
+                        return self::can_import_profiles();
                     },
                 )
             );
@@ -1355,7 +1382,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'methods'             => WP_REST_Server::READABLE,
                     'callback'            => array(__CLASS__, 'rest_export_profiles'),
                     'permission_callback' => function () {
-                        return current_user_can('export_citation_profiles');
+                        return self::can_export_profiles();
                     },
                 )
             );

@@ -8,7 +8,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
     {
         const STORE_OPTION = 'mec_builder_store_v1';
         const CAPS_OPTION = 'mec_builder_caps_version';
-        const CAPS_VERSION = '1.0.1';
+        const CAPS_VERSION = '1.0.2';
 
         const NONCE_BUILDER = 'mec_builder_nonce';
         const NONCE_DASHBOARD = 'mec_dashboard_nonce';
@@ -492,10 +492,24 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             return isset($map[$type]['cap']) ? $map[$type]['cap'] : 'manage_citation_builder';
         }
 
+        private static function has_admin_fallback()
+        {
+            return current_user_can('manage_options') || current_user_can('manage_network_options');
+        }
+
+        private static function can_manage_builder()
+        {
+            return self::has_admin_fallback() || current_user_can('manage_citation_builder');
+        }
+
+        private static function can_manage_entity($type)
+        {
+            return self::has_admin_fallback() || current_user_can(self::get_type_capability($type));
+        }
+
         private static function ensure_entity_permission_or_die($type)
         {
-            $cap = self::get_type_capability($type);
-            if (!current_user_can($cap)) {
+            if (!self::can_manage_entity($type)) {
                 wp_die(esc_html__('You do not have permission for this builder action.', 'madextra-citations'));
             }
         }
@@ -506,7 +520,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'edit.php?post_type=' . MadExtra_Citations_Plugin::CPT,
                 __('Citations Builder', 'madextra-citations'),
                 __('Citations Builder', 'madextra-citations'),
-                'manage_citation_builder',
+                'read',
                 self::ADMIN_PAGE_SLUG,
                 array(__CLASS__, 'render_builder_page')
             );
@@ -514,7 +528,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
 
         public static function render_builder_page()
         {
-            if (!current_user_can('manage_citation_builder')) {
+            if (!self::can_manage_builder()) {
                 wp_die(esc_html__('You do not have permission to access this page.', 'madextra-citations'));
             }
 
@@ -1195,7 +1209,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
 
         private static function render_term_dynamic_fields($taxonomy, $term_id, $is_edit)
         {
-            if (!current_user_can('manage_citation_builder')) {
+            if (!self::can_manage_builder()) {
                 return;
             }
 
@@ -1228,7 +1242,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
 
         private static function save_term_dynamic_fields($taxonomy, $term_id)
         {
-            if (!current_user_can('manage_citation_builder')) {
+            if (!self::can_manage_builder()) {
                 return;
             }
             $fields = self::get_dynamic_fields_for_target($taxonomy);
@@ -1244,7 +1258,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
 
         public static function render_user_fields($user)
         {
-            if (!current_user_can('manage_citation_builder')) {
+            if (!self::can_manage_builder()) {
                 return;
             }
             $fields = self::get_dynamic_fields_for_target('user');
@@ -1344,7 +1358,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (!$user_id) {
                 return false;
             }
-            if (current_user_can('manage_citation_profiles')) {
+            if (self::has_admin_fallback() || current_user_can('manage_citation_profiles')) {
                 return true;
             }
             return (int) get_post_field('post_author', $post_id) === $user_id;
@@ -1358,7 +1372,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
         private static function upsert_profile($post_id, array $payload, $author_id = 0)
         {
             $clean = self::sanitize_profile_payload($payload);
-            if (!current_user_can('manage_citation_profiles')) {
+            if (!self::has_admin_fallback() && !current_user_can('manage_citation_profiles')) {
                 $clean['internal_notes'] = '';
                 $clean['is_featured'] = '0';
             }
@@ -1421,7 +1435,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (!is_user_logged_in()) {
                 wp_die(esc_html__('You must be logged in.', 'madextra-citations'));
             }
-            if (!current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
+            if (!self::has_admin_fallback() && !current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
                 wp_die(esc_html__('You do not have permission.', 'madextra-citations'));
             }
 
@@ -1458,7 +1472,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (!is_user_logged_in()) {
                 wp_die(esc_html__('You must be logged in.', 'madextra-citations'));
             }
-            if (!current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
+            if (!self::has_admin_fallback() && !current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
                 wp_die(esc_html__('You do not have permission.', 'madextra-citations'));
             }
             if (!isset($_POST[self::NONCE_DASHBOARD]) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST[self::NONCE_DASHBOARD])), 'mec_profile_delete')) {
@@ -1484,7 +1498,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                     '</a>'
                 ) . '</p>';
             }
-            if (!current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
+            if (!self::has_admin_fallback() && !current_user_can('submit_citation_profiles') && !current_user_can('manage_citation_profiles')) {
                 return '<p>' . esc_html__('You do not have dashboard access.', 'madextra-citations') . '</p>';
             }
 
@@ -1538,7 +1552,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'orderby' => 'date',
                 'order' => 'DESC',
             );
-            if (!current_user_can('manage_citation_profiles')) {
+            if (!self::has_admin_fallback() && !current_user_can('manage_citation_profiles')) {
                 $query_args['author'] = get_current_user_id();
             }
             $query = new WP_Query($query_args);
@@ -1776,7 +1790,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                                 return rest_ensure_response(array('items' => array_values(self::get_entities($type))));
                             },
                             'permission_callback' => function () use ($type) {
-                                return current_user_can(self::get_type_capability($type));
+                                return self::can_manage_entity($type);
                             },
                         ),
                         array(
@@ -1787,7 +1801,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                                 return rest_ensure_response($entity);
                             },
                             'permission_callback' => function () use ($type) {
-                                return current_user_can(self::get_type_capability($type));
+                                return self::can_manage_entity($type);
                             },
                         ),
                     )
@@ -1808,7 +1822,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                                 return rest_ensure_response($entity);
                             },
                             'permission_callback' => function () use ($type) {
-                                return current_user_can(self::get_type_capability($type));
+                                return self::can_manage_entity($type);
                             },
                         ),
                         array(
@@ -1821,7 +1835,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                                 return rest_ensure_response($entity);
                             },
                             'permission_callback' => function () use ($type) {
-                                return current_user_can(self::get_type_capability($type));
+                                return self::can_manage_entity($type);
                             },
                         ),
                         array(
@@ -1832,7 +1846,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                                 return rest_ensure_response(array('deleted' => $id));
                             },
                             'permission_callback' => function () use ($type) {
-                                return current_user_can(self::get_type_capability($type));
+                                return self::can_manage_entity($type);
                             },
                         ),
                     )
@@ -1846,7 +1860,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                     'methods' => WP_REST_Server::CREATABLE,
                     'callback' => array(__CLASS__, 'rest_create_profile'),
                     'permission_callback' => function () {
-                        return current_user_can('submit_citation_profiles') || current_user_can('manage_citation_profiles');
+                        return self::has_admin_fallback() || current_user_can('submit_citation_profiles') || current_user_can('manage_citation_profiles');
                     },
                 )
             );
@@ -1860,7 +1874,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                         'callback' => array(__CLASS__, 'rest_update_profile'),
                         'permission_callback' => function (WP_REST_Request $request) {
                             $post_id = (int) $request['id'];
-                            return current_user_can('manage_citation_profiles') || self::can_edit_profile($post_id);
+                            return self::has_admin_fallback() || current_user_can('manage_citation_profiles') || self::can_edit_profile($post_id);
                         },
                     ),
                     array(
@@ -1868,7 +1882,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                         'callback' => array(__CLASS__, 'rest_delete_profile'),
                         'permission_callback' => function (WP_REST_Request $request) {
                             $post_id = (int) $request['id'];
-                            return current_user_can('manage_citation_profiles') || self::can_delete_profile($post_id);
+                            return self::has_admin_fallback() || current_user_can('manage_citation_profiles') || self::can_delete_profile($post_id);
                         },
                     ),
                 )
