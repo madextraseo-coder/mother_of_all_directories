@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.2.2
+ * Version: 0.2.3
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -1219,7 +1219,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             echo '</p></div>';
         }
 
-        private static function redirect_tools_page()
+        public static function redirect_tools_page()
         {
             $url = add_query_arg(
                 array(
