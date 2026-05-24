@@ -68,12 +68,14 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('manage_' . self::CPT . '_posts_custom_column', array(__CLASS__, 'render_admin_columns'), 10, 2);
             add_action('restrict_manage_posts', array(__CLASS__, 'render_admin_filters'));
             add_filter('parse_query', array(__CLASS__, 'apply_admin_filters'));
+            add_filter('post_row_actions', array(__CLASS__, 'filter_admin_row_actions'), 10, 2);
 
             add_action('admin_menu', array(__CLASS__, 'register_tools_submenu'));
             add_action('admin_post_mec_export_csv', array(__CLASS__, 'handle_export_request'));
             add_action('admin_post_mec_import_csv', array(__CLASS__, 'handle_import_request'));
             add_action('admin_post_mec_public_submit', array(__CLASS__, 'handle_public_submit_request'));
             add_action('admin_post_nopriv_mec_public_submit', array(__CLASS__, 'handle_public_submit_request'));
+            add_action('admin_post_mec_set_featured_slot', array(__CLASS__, 'handle_set_featured_slot'));
             add_action('admin_init', array(__CLASS__, 'maybe_redirect_legacy_tools_page'));
             add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_admin_assets'));
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
@@ -759,11 +761,11 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 update_post_meta($post_id, self::META_PREFIX . $key, $value);
             }
 
-            if (empty(get_the_title($post_id)) && !empty($clean['directory_name'])) {
+            if (!empty(self::admin_business_title($clean))) {
                 wp_update_post(
                     array(
                         'ID'         => $post_id,
-                        'post_title' => $clean['directory_name'],
+                        'post_title' => self::admin_business_title($clean),
                     )
                 );
             }
@@ -772,6 +774,16 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             wp_set_object_terms($post_id, $service_ids, self::TAX_SERVICE, false);
 
             update_post_meta($post_id, self::META_PREFIX . 'unique_key', self::build_unique_key($clean, $market_ids, $service_ids));
+        }
+
+        public static function admin_business_title(array $clean)
+        {
+            $business_name = isset($clean['nap_business_name']) ? trim((string) $clean['nap_business_name']) : '';
+            if ('' !== $business_name) {
+                return $business_name;
+            }
+
+            return isset($clean['directory_name']) ? (string) $clean['directory_name'] : '';
         }
 
         private static function sanitize_profile_payload(array $payload)
@@ -848,8 +860,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
         public static function register_admin_columns($columns)
         {
+            $columns['title'] = __('Business', 'madextra-citations');
             unset($columns['date']);
-
             $columns['directory_name'] = __('Directory', 'madextra-citations');
             $columns['status'] = __('Status', 'madextra-citations');
             $columns['market'] = __('Market', 'madextra-citations');
@@ -896,8 +908,43 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             if ('is_featured' === $column) {
                 $featured = get_post_meta($post_id, self::META_PREFIX . 'is_featured', true);
                 $order = (int) get_post_meta($post_id, self::META_PREFIX . 'featured_order', true);
-                echo '1' === $featured ? esc_html(sprintf(__('Yes, slot %d', 'madextra-citations'), max(1, $order))) : esc_html__('No', 'madextra-citations');
+                if ('1' === $featured) {
+                    echo esc_html(sprintf(__('Yes, slot %d', 'madextra-citations'), max(1, $order)));
+                } else {
+                    echo esc_html__('No', 'madextra-citations');
+                }
+
+                if (current_user_can('manage_citation_profiles')) {
+                    $actions = array();
+                    foreach (array(1, 2, 3) as $slot) {
+                        $actions[] = sprintf(
+                            '<a href="%s">%s</a>',
+                            esc_url(self::featured_slot_url($post_id, $slot)),
+                            esc_html(sprintf(__('Set %d', 'madextra-citations'), $slot))
+                        );
+                    }
+                    $actions[] = sprintf(
+                        '<a href="%s">%s</a>',
+                        esc_url(self::featured_slot_url($post_id, 0)),
+                        esc_html__('Remove', 'madextra-citations')
+                    );
+                    echo '<div class="row-actions" style="position:static;visibility:visible;">' . wp_kses_post(implode(' | ', $actions)) . '</div>';
+                }
             }
+        }
+
+        public static function filter_admin_row_actions($actions, $post)
+        {
+            if (!$post instanceof WP_Post || self::CPT !== $post->post_type || !current_user_can('manage_citation_profiles')) {
+                return $actions;
+            }
+
+            $actions['feature_slot_1'] = '<a href="' . esc_url(self::featured_slot_url($post->ID, 1)) . '">' . esc_html__('Feature 1', 'madextra-citations') . '</a>';
+            $actions['feature_slot_2'] = '<a href="' . esc_url(self::featured_slot_url($post->ID, 2)) . '">' . esc_html__('Feature 2', 'madextra-citations') . '</a>';
+            $actions['feature_slot_3'] = '<a href="' . esc_url(self::featured_slot_url($post->ID, 3)) . '">' . esc_html__('Feature 3', 'madextra-citations') . '</a>';
+            $actions['feature_remove'] = '<a href="' . esc_url(self::featured_slot_url($post->ID, 0)) . '">' . esc_html__('Remove Featured', 'madextra-citations') . '</a>';
+
+            return $actions;
         }
 
         public static function render_admin_filters($post_type)
@@ -1187,7 +1234,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $post_data = array(
                 'post_type'   => self::CPT,
                 'post_status' => 'publish',
-                'post_title'  => $clean['directory_name'],
+                'post_title'  => self::admin_business_title($clean),
             );
 
             $action = 'created';
@@ -1319,6 +1366,73 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             }
 
             return true;
+        }
+
+        private static function featured_slot_url($post_id, $slot)
+        {
+            return wp_nonce_url(
+                add_query_arg(
+                    array(
+                        'action'  => 'mec_set_featured_slot',
+                        'post_id' => (int) $post_id,
+                        'slot'    => (int) $slot,
+                    ),
+                    admin_url('admin-post.php')
+                ),
+                'mec_set_featured_slot_' . (int) $post_id . '_' . (int) $slot
+            );
+        }
+
+        public static function handle_set_featured_slot()
+        {
+            if (!current_user_can('manage_citation_profiles')) {
+                wp_die(esc_html__('You do not have permission to update featured slots.', 'madextra-citations'));
+            }
+
+            $post_id = isset($_GET['post_id']) ? (int) $_GET['post_id'] : 0;
+            $slot = isset($_GET['slot']) ? (int) $_GET['slot'] : 0;
+            $slot = min(3, max(0, $slot));
+
+            if (!$post_id || self::CPT !== get_post_type($post_id)) {
+                wp_die(esc_html__('Invalid citation profile.', 'madextra-citations'));
+            }
+
+            check_admin_referer('mec_set_featured_slot_' . $post_id . '_' . $slot);
+
+            $market_ids = wp_get_object_terms($post_id, self::TAX_MARKET, array('fields' => 'ids'));
+            if (is_wp_error($market_ids)) {
+                $market_ids = array();
+            }
+            $market_ids = array_values(array_filter(array_map('intval', (array) $market_ids)));
+
+            $clean = array(
+                'is_featured' => $slot > 0 ? '1' : '0',
+                'featured_order' => (string) $slot,
+            );
+
+            $validation = self::validate_featured_slot($post_id, $clean, $market_ids);
+            if (is_wp_error($validation)) {
+                self::queue_notice($validation->get_error_message(), 'error');
+            } else {
+                update_post_meta($post_id, self::META_PREFIX . 'is_featured', $slot > 0 ? '1' : '0');
+                update_post_meta($post_id, self::META_PREFIX . 'featured_order', (string) $slot);
+                self::queue_notice(
+                    $slot > 0
+                        ? sprintf(__('Featured slot updated to %d.', 'madextra-citations'), $slot)
+                        : __('Featured status removed.', 'madextra-citations'),
+                    'success'
+                );
+            }
+
+            wp_safe_redirect(
+                add_query_arg(
+                    array(
+                        'post_type' => self::CPT,
+                    ),
+                    admin_url('edit.php')
+                )
+            );
+            exit;
         }
 
         private static function map_row_keys(array $row)
@@ -2007,7 +2121,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 array(
                     'post_type'   => self::CPT,
                     'post_status' => 'pending',
-                    'post_title'  => $clean['directory_name'],
+                    'post_title'  => self::admin_business_title($clean),
                 ),
                 true
             );

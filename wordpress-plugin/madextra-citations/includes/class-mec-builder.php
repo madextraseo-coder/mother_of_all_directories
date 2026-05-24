@@ -1457,7 +1457,9 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             $post_args = array(
                 'post_type' => MadExtra_Citations_Plugin::CPT,
                 'post_status' => 'publish',
-                'post_title' => $clean['directory_name'],
+                'post_title' => method_exists('MadExtra_Citations_Plugin', 'admin_business_title')
+                    ? MadExtra_Citations_Plugin::admin_business_title($clean)
+                    : $clean['directory_name'],
             );
             if ($post_id) {
                 $post_args['ID'] = (int) $post_id;
