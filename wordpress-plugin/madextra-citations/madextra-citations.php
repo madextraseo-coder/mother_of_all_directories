@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and searchable public directory pages.
- * Version: 0.6.2
+ * Version: 0.6.3
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const SHORTCODE = 'madextra_citations_directory';
         const PROFILE_SHORTCODE = 'mec_public_profile';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.2.0';
+        const CAPS_VERSION = '1.2.1';
         const PUBLIC_SUBMIT_SHORTCODE = 'mec_public_submit_form';
         const STRIPE_RETURN_SHORTCODE = 'mec_stripe_return';
         const LOGO_MAX_BYTES = 2097152;
@@ -136,7 +136,12 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         {
             $roles = isset($user->roles) && is_array($user->roles) ? $user->roles : array();
             $is_citation_role = in_array('citation_admin', $roles, true) || in_array('citation_manager', $roles, true);
-            $is_trusted_admin_user = !empty($allcaps['manage_options']) || !empty($allcaps['edit_posts']);
+            $is_trusted_admin_user =
+                !empty($allcaps['manage_options']) ||
+                !empty($allcaps['edit_posts']) ||
+                !empty($allcaps['activate_plugins']) ||
+                !empty($allcaps['install_plugins']) ||
+                !empty($allcaps['update_plugins']);
             $is_logged_in_user = !empty($allcaps['read']);
 
             if (!empty($allcaps['manage_citation_profiles'])) {
@@ -405,8 +410,13 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $roles_object = wp_roles();
             if ($roles_object instanceof WP_Roles && !empty($roles_object->roles)) {
                 foreach ($roles_object->roles as $role_slug => $role_data) {
-                    $has_manage_options = !empty($role_data['capabilities']['manage_options']);
-                    if (!$has_manage_options) {
+                    $has_admin_power =
+                        !empty($role_data['capabilities']['manage_options']) ||
+                        !empty($role_data['capabilities']['edit_posts']) ||
+                        !empty($role_data['capabilities']['activate_plugins']) ||
+                        !empty($role_data['capabilities']['install_plugins']) ||
+                        !empty($role_data['capabilities']['update_plugins']);
+                    if (!$has_admin_power) {
                         continue;
                     }
 
