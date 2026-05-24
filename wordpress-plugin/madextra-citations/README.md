@@ -68,6 +68,13 @@ This plugin now includes a modular builder layer to support a JetEngine-style dy
   - `PUT|DELETE /wp-json/madextra-citations/v1/profiles/{id}`
 - Public grouped directory shortcode:
   - `[madextra_citations_directory]`
+- Public submission shortcode:
+  - `[mec_public_submit_form]`
+- Directory behavior:
+  - grouped by city/market
+  - regular profiles paged in groups of 25 per city
+  - global search across all cities and all loaded profiles
+  - up to 3 manually ordered featured profiles per city
 
 ## Required Profile Fields
 
@@ -80,10 +87,23 @@ This plugin now includes a modular builder layer to support a JetEngine-style dy
 - `nap_address`
 - `nap_phone`
 
+Optional public profile fields:
+
+- `business_website_url`
+- `business_logo_id`
+- `business_email`
+- `business_description`
+- `business_hours`
+- `address_street`
+- `address_city`
+- `address_state`
+- `address_zip`
+
 Optional admin-only:
 
 - `internal_notes`
 - `is_featured`
+- `featured_order`
 
 ## Quick Deploy (Beginner Friendly)
 
@@ -110,8 +130,18 @@ Accepted CSV columns:
 - `nap_business_name`
 - `nap_address`
 - `nap_phone`
+- `business_website_url`
+- `business_logo_id`
+- `business_email`
+- `business_description`
+- `business_hours`
+- `address_street`
+- `address_city`
+- `address_state`
+- `address_zip`
 - `internal_notes`
 - `is_featured`
+- `featured_order`
 - `market`
 - `service`
 

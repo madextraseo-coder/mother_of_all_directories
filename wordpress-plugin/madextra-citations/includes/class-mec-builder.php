@@ -8,7 +8,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
     {
         const STORE_OPTION = 'mec_builder_store_v1';
         const CAPS_OPTION = 'mec_builder_caps_version';
-        const CAPS_VERSION = '1.0.2';
+        const CAPS_VERSION = '1.1.0';
 
         const NONCE_BUILDER = 'mec_builder_nonce';
         const NONCE_DASHBOARD = 'mec_dashboard_nonce';
@@ -143,7 +143,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                     'label' => 'Default Table Template',
                     'description' => 'Default table rendering for citation profiles.',
                     'style' => 'table',
-                    'columns' => array('directory_name', 'services', 'status', 'last_verified_date', 'listing_url', 'public_notes'),
+                    'columns' => array('nap_business_name', 'services', 'business_website_url', 'nap_phone', 'display_address', 'listing_url'),
                     'show_filters' => '1',
                     'visibility_rules' => '',
                     'updated_at' => current_time('mysql'),
@@ -190,7 +190,16 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                         'nap_business_name',
                         'nap_address',
                         'nap_phone',
+                        'business_website_url',
+                        'business_email',
+                        'business_description',
+                        'business_hours',
+                        'address_street',
+                        'address_city',
+                        'address_state',
+                        'address_zip',
                         'is_featured',
+                        'featured_order',
                     ),
                     'allow_create' => '1',
                     'allow_edit' => '1',
@@ -727,7 +736,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 <tr>
                     <th scope="row"><label for="mec_tpl_columns"><?php esc_html_e('Columns/Fields', 'madextra-citations'); ?></label></th>
                     <td>
-                        <input type="text" id="mec_tpl_columns" class="large-text" name="item[columns]" value="<?php echo esc_attr($entity && !empty($entity['columns']) ? self::csv_for_list($entity['columns']) : 'directory_name, services, status, last_verified_date, listing_url, public_notes'); ?>">
+                        <input type="text" id="mec_tpl_columns" class="large-text" name="item[columns]" value="<?php echo esc_attr($entity && !empty($entity['columns']) ? self::csv_for_list($entity['columns']) : 'nap_business_name, services, business_website_url, nap_phone, display_address, listing_url'); ?>">
                         <p class="description"><?php esc_html_e('Comma-separated field keys used in rendering.', 'madextra-citations'); ?></p>
                     </td>
                 </tr>
@@ -814,7 +823,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 <tr>
                     <th scope="row"><label for="mec_form_allowed"><?php esc_html_e('Allowed Fields', 'madextra-citations'); ?></label></th>
                     <td>
-                        <input type="text" id="mec_form_allowed" class="large-text" name="item[allowed_fields]" value="<?php echo esc_attr($entity && !empty($entity['allowed_fields']) ? self::csv_for_list($entity['allowed_fields']) : 'directory_name, listing_url, status, last_verified_date, public_notes, nap_business_name, nap_address, nap_phone, is_featured'); ?>">
+                        <input type="text" id="mec_form_allowed" class="large-text" name="item[allowed_fields]" value="<?php echo esc_attr($entity && !empty($entity['allowed_fields']) ? self::csv_for_list($entity['allowed_fields']) : 'directory_name, listing_url, status, last_verified_date, public_notes, nap_business_name, nap_address, nap_phone, business_website_url, business_email, business_description, business_hours, address_street, address_city, address_state, address_zip, is_featured, featured_order'); ?>">
                     </td>
                 </tr>
                 <tr>
@@ -1308,8 +1317,18 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'nap_business_name' => array('type' => 'text', 'required' => true),
                 'nap_address' => array('type' => 'textarea', 'required' => true),
                 'nap_phone' => array('type' => 'text', 'required' => true),
+                'business_website_url' => array('type' => 'url', 'required' => false),
+                'business_logo_id' => array('type' => 'number', 'required' => false),
+                'business_email' => array('type' => 'text', 'required' => false),
+                'business_description' => array('type' => 'textarea', 'required' => false),
+                'business_hours' => array('type' => 'textarea', 'required' => false),
+                'address_street' => array('type' => 'text', 'required' => false),
+                'address_city' => array('type' => 'text', 'required' => false),
+                'address_state' => array('type' => 'text', 'required' => false),
+                'address_zip' => array('type' => 'text', 'required' => false),
                 'internal_notes' => array('type' => 'textarea', 'required' => false),
                 'is_featured' => array('type' => 'checkbox', 'required' => false),
+                'featured_order' => array('type' => 'number', 'required' => false),
             );
         }
 
@@ -1325,7 +1344,16 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 $status = 'pending';
             }
 
-            return array(
+            $featured_order = isset($payload['featured_order']) ? (int) $payload['featured_order'] : 0;
+            $featured_order = min(3, max(0, $featured_order));
+            $is_featured = $featured_order > 0 || !empty($payload['is_featured']) ? '1' : '0';
+            if ('0' === $is_featured) {
+                $featured_order = 0;
+            } elseif (0 === $featured_order) {
+                $featured_order = 1;
+            }
+
+            $clean = array(
                 'directory_name' => isset($payload['directory_name']) ? sanitize_text_field($payload['directory_name']) : '',
                 'listing_url' => isset($payload['listing_url']) ? esc_url_raw($payload['listing_url']) : '',
                 'status' => $status,
@@ -1334,9 +1362,38 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'nap_business_name' => isset($payload['nap_business_name']) ? sanitize_text_field($payload['nap_business_name']) : '',
                 'nap_address' => isset($payload['nap_address']) ? sanitize_textarea_field($payload['nap_address']) : '',
                 'nap_phone' => isset($payload['nap_phone']) ? sanitize_text_field($payload['nap_phone']) : '',
+                'business_website_url' => isset($payload['business_website_url']) ? esc_url_raw($payload['business_website_url']) : '',
+                'business_logo_id' => isset($payload['business_logo_id']) ? (string) max(0, (int) $payload['business_logo_id']) : '0',
+                'business_email' => isset($payload['business_email']) ? sanitize_email($payload['business_email']) : '',
+                'business_description' => isset($payload['business_description']) ? sanitize_textarea_field($payload['business_description']) : '',
+                'business_hours' => isset($payload['business_hours']) ? sanitize_textarea_field($payload['business_hours']) : '',
+                'address_street' => isset($payload['address_street']) ? sanitize_text_field($payload['address_street']) : '',
+                'address_city' => isset($payload['address_city']) ? sanitize_text_field($payload['address_city']) : '',
+                'address_state' => isset($payload['address_state']) ? sanitize_text_field($payload['address_state']) : '',
+                'address_zip' => isset($payload['address_zip']) ? sanitize_text_field($payload['address_zip']) : '',
                 'internal_notes' => isset($payload['internal_notes']) ? sanitize_textarea_field($payload['internal_notes']) : '',
-                'is_featured' => !empty($payload['is_featured']) ? '1' : '0',
+                'is_featured' => $is_featured,
+                'featured_order' => (string) $featured_order,
             );
+
+            if (empty($clean['nap_address'])) {
+                $clean['nap_address'] = self::compose_full_address($clean);
+            }
+
+            return $clean;
+        }
+
+        private static function compose_full_address(array $clean)
+        {
+            $line_one = isset($clean['address_street']) ? trim((string) $clean['address_street']) : '';
+            $city = isset($clean['address_city']) ? trim((string) $clean['address_city']) : '';
+            $state = isset($clean['address_state']) ? trim((string) $clean['address_state']) : '';
+            $zip = isset($clean['address_zip']) ? trim((string) $clean['address_zip']) : '';
+
+            $city_state = trim(implode(', ', array_filter(array($city, $state))));
+            $city_state_zip = trim(implode(' ', array_filter(array($city_state, $zip))));
+
+            return trim(implode("\n", array_filter(array($line_one, $city_state_zip))));
         }
 
         private static function validate_profile_required(array $clean)
@@ -1348,6 +1405,12 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 if (!isset($clean[$key]) || '' === trim((string) $clean[$key])) {
                     return new WP_Error('missing_field', sprintf(__('Missing required field: %s', 'madextra-citations'), $key));
                 }
+            }
+            if (!empty($clean['business_website_url']) && !wp_http_validate_url($clean['business_website_url'])) {
+                return new WP_Error('invalid_business_website_url', __('Invalid business website URL.', 'madextra-citations'));
+            }
+            if (!empty($clean['business_email']) && !is_email($clean['business_email'])) {
+                return new WP_Error('invalid_business_email', __('Invalid business email address.', 'madextra-citations'));
             }
             return true;
         }
@@ -1375,10 +1438,20 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (!self::has_admin_fallback() && !current_user_can('manage_citation_profiles')) {
                 $clean['internal_notes'] = '';
                 $clean['is_featured'] = '0';
+                $clean['featured_order'] = '0';
             }
             $validation = self::validate_profile_required($clean);
             if (is_wp_error($validation)) {
                 return $validation;
+            }
+
+            $market_ids = isset($payload['mec_markets']) ? array_values(array_filter(array_map('intval', (array) $payload['mec_markets']))) : array();
+            $service_ids = isset($payload['mec_services']) ? array_values(array_filter(array_map('intval', (array) $payload['mec_services']))) : array();
+            if (method_exists('MadExtra_Citations_Plugin', 'validate_featured_slot')) {
+                $featured_validation = MadExtra_Citations_Plugin::validate_featured_slot($post_id, $clean, $market_ids);
+                if (is_wp_error($featured_validation)) {
+                    return $featured_validation;
+                }
             }
 
             $post_args = array(
@@ -1403,8 +1476,6 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 update_post_meta($profile_id, MadExtra_Citations_Plugin::META_PREFIX . $key, $value);
             }
 
-            $market_ids = isset($payload['mec_markets']) ? array_values(array_filter(array_map('intval', (array) $payload['mec_markets']))) : array();
-            $service_ids = isset($payload['mec_services']) ? array_values(array_filter(array_map('intval', (array) $payload['mec_services']))) : array();
             wp_set_object_terms($profile_id, $market_ids, MadExtra_Citations_Plugin::TAX_MARKET, false);
             wp_set_object_terms($profile_id, $service_ids, MadExtra_Citations_Plugin::TAX_SERVICE, false);
 
@@ -1517,7 +1588,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             }
             $allowed_fields = isset($form['allowed_fields']) && is_array($form['allowed_fields']) ? $form['allowed_fields'] : array();
             if (!$allowed_fields) {
-                $allowed_fields = array('directory_name', 'listing_url', 'status', 'last_verified_date', 'public_notes', 'nap_business_name', 'nap_address', 'nap_phone', 'is_featured');
+                $allowed_fields = array('directory_name', 'listing_url', 'status', 'last_verified_date', 'public_notes', 'nap_business_name', 'nap_address', 'nap_phone', 'business_website_url', 'business_email', 'business_description', 'business_hours', 'address_street', 'address_city', 'address_state', 'address_zip', 'is_featured', 'featured_order');
             }
 
             $editing_id = isset($_GET['mec_edit']) ? (int) $_GET['mec_edit'] : 0;
@@ -1709,12 +1780,57 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 echo '<label>' . esc_html__('NAP Phone', 'madextra-citations') . '</label>';
                 echo '<input type="text" name="mec[nap_phone]" value="' . esc_attr($values['nap_phone']) . '" required>';
             }
+            if (isset($allowed['business_website_url'])) {
+                echo '<label>' . esc_html__('Business Website URL', 'madextra-citations') . '</label>';
+                echo '<input type="url" name="mec[business_website_url]" value="' . esc_attr($values['business_website_url']) . '">';
+            }
+            if (isset($allowed['business_logo_id'])) {
+                echo '<label>' . esc_html__('Business Logo Attachment ID', 'madextra-citations') . '</label>';
+                echo '<input type="number" min="0" step="1" name="mec[business_logo_id]" value="' . esc_attr($values['business_logo_id']) . '">';
+            }
+            if (isset($allowed['business_email'])) {
+                echo '<label>' . esc_html__('Business Email', 'madextra-citations') . '</label>';
+                echo '<input type="text" name="mec[business_email]" value="' . esc_attr($values['business_email']) . '">';
+            }
+            if (isset($allowed['business_description'])) {
+                echo '<label>' . esc_html__('Business Description', 'madextra-citations') . '</label>';
+                echo '<textarea name="mec[business_description]" rows="3">' . esc_textarea($values['business_description']) . '</textarea>';
+            }
+            if (isset($allowed['business_hours'])) {
+                echo '<label>' . esc_html__('Business Hours', 'madextra-citations') . '</label>';
+                echo '<textarea name="mec[business_hours]" rows="3">' . esc_textarea($values['business_hours']) . '</textarea>';
+            }
+            if (isset($allowed['address_street'])) {
+                echo '<label>' . esc_html__('Street Address', 'madextra-citations') . '</label>';
+                echo '<input type="text" name="mec[address_street]" value="' . esc_attr($values['address_street']) . '">';
+            }
+            if (isset($allowed['address_city'])) {
+                echo '<label>' . esc_html__('City', 'madextra-citations') . '</label>';
+                echo '<input type="text" name="mec[address_city]" value="' . esc_attr($values['address_city']) . '">';
+            }
+            if (isset($allowed['address_state'])) {
+                echo '<label>' . esc_html__('State', 'madextra-citations') . '</label>';
+                echo '<input type="text" name="mec[address_state]" value="' . esc_attr($values['address_state']) . '">';
+            }
+            if (isset($allowed['address_zip'])) {
+                echo '<label>' . esc_html__('ZIP Code', 'madextra-citations') . '</label>';
+                echo '<input type="text" name="mec[address_zip]" value="' . esc_attr($values['address_zip']) . '">';
+            }
             if (isset($allowed['internal_notes']) && current_user_can('manage_citation_profiles')) {
                 echo '<label>' . esc_html__('Internal Notes', 'madextra-citations') . '</label>';
                 echo '<textarea name="mec[internal_notes]" rows="3">' . esc_textarea($values['internal_notes']) . '</textarea>';
             }
             if (isset($allowed['is_featured'])) {
                 echo '<label><input type="checkbox" name="mec[is_featured]" value="1" ' . checked($values['is_featured'], '1', false) . '> ' . esc_html__('Featured', 'madextra-citations') . '</label>';
+            }
+            if (isset($allowed['featured_order'])) {
+                echo '<label>' . esc_html__('Featured Slot', 'madextra-citations') . '</label>';
+                echo '<select name="mec[featured_order]">';
+                foreach (array(0, 1, 2, 3) as $slot) {
+                    $label = 0 === $slot ? __('Not featured', 'madextra-citations') : sprintf(__('Featured position %d', 'madextra-citations'), $slot);
+                    echo '<option value="' . esc_attr((string) $slot) . '" ' . selected((int) $values['featured_order'], $slot, false) . '>' . esc_html($label) . '</option>';
+                }
+                echo '</select>';
             }
         }
 
@@ -1729,8 +1845,18 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'nap_business_name' => '',
                 'nap_address' => '',
                 'nap_phone' => '',
+                'business_website_url' => '',
+                'business_logo_id' => '0',
+                'business_email' => '',
+                'business_description' => '',
+                'business_hours' => '',
+                'address_street' => '',
+                'address_city' => '',
+                'address_state' => '',
+                'address_zip' => '',
                 'internal_notes' => '',
                 'is_featured' => '0',
+                'featured_order' => '0',
             );
         }
 
@@ -1930,6 +2056,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (is_wp_error($services)) {
                 $services = array();
             }
+            $logo_id = (int) get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'business_logo_id', true);
 
             $data = array(
                 'id' => (int) $post_id,
@@ -1942,12 +2069,27 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 'nap_business_name' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'nap_business_name', true),
                 'nap_address' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'nap_address', true),
                 'nap_phone' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'nap_phone', true),
+                'business_website_url' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'business_website_url', true),
+                'business_logo_id' => (string) $logo_id,
+                'business_logo_url' => $logo_id ? wp_get_attachment_image_url($logo_id, 'thumbnail') : '',
+                'business_email' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'business_email', true),
+                'business_description' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'business_description', true),
+                'business_hours' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'business_hours', true),
+                'address_street' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'address_street', true),
+                'address_city' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'address_city', true),
+                'address_state' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'address_state', true),
+                'address_zip' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'address_zip', true),
                 'is_featured' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'is_featured', true),
+                'featured_order' => get_post_meta($post_id, MadExtra_Citations_Plugin::META_PREFIX . 'featured_order', true),
                 'markets' => array_values((array) $markets),
                 'services' => array_values((array) $services),
                 'dynamic' => array(),
                 'relations' => array(),
             );
+            $data['display_address'] = self::compose_full_address($data);
+            if ('' === $data['display_address']) {
+                $data['display_address'] = $data['nap_address'];
+            }
 
             $fields = self::get_dynamic_fields_for_target(MadExtra_Citations_Plugin::CPT);
             foreach ($fields as $field_key => $field) {
@@ -2042,7 +2184,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             }
             return array(
                 'style' => 'table',
-                'columns' => array('directory_name', 'services', 'status', 'last_verified_date', 'listing_url', 'public_notes'),
+                'columns' => array('nap_business_name', 'services', 'business_website_url', 'nap_phone', 'display_address', 'listing_url'),
                 'show_filters' => '1',
                 'visibility_rules' => '',
             );
@@ -2230,6 +2372,21 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                     return '-';
                 }
                 return '<a href="' . esc_url($profile['listing_url']) . '" target="_blank" rel="noopener">' . esc_html__('Open', 'madextra-citations') . '</a>';
+            }
+            if ('business_website_url' === $field_key) {
+                if (empty($profile['business_website_url'])) {
+                    return '-';
+                }
+                return '<a href="' . esc_url($profile['business_website_url']) . '" target="_blank" rel="noopener">' . esc_html__('Website', 'madextra-citations') . '</a>';
+            }
+            if ('display_address' === $field_key) {
+                return !empty($profile['display_address']) ? nl2br(esc_html((string) $profile['display_address'])) : '-';
+            }
+            if ('business_logo_url' === $field_key) {
+                if (empty($profile['business_logo_url'])) {
+                    return '-';
+                }
+                return '<img src="' . esc_url($profile['business_logo_url']) . '" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">';
             }
             if (isset($profile[$field_key]) && '' !== (string) $profile[$field_key]) {
                 return esc_html((string) $profile[$field_key]);
