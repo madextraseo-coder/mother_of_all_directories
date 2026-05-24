@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -724,11 +724,27 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'mec-csv-tools',
                 array(__CLASS__, 'render_tools_page')
             );
+
+            // Fallback entry for users who can access the builder stack but were
+            // not granted legacy manage_citation_profiles capability yet.
+            add_submenu_page(
+                'edit.php?post_type=' . self::CPT,
+                __('Citation CSV Tools', 'madextra-citations'),
+                __('CSV Tools (Builder)', 'madextra-citations'),
+                'manage_citation_builder',
+                'mec-csv-tools-builder',
+                array(__CLASS__, 'redirect_tools_page')
+            );
         }
 
         public static function render_tools_page()
         {
-            if (!current_user_can('manage_citation_profiles')) {
+            if (
+                !current_user_can('manage_citation_profiles') &&
+                !current_user_can('import_citation_profiles') &&
+                !current_user_can('export_citation_profiles') &&
+                !current_user_can('manage_citation_builder')
+            ) {
                 wp_die(esc_html__('You do not have permission to view this page.', 'madextra-citations'));
             }
 
