@@ -59,70 +59,78 @@ if (!class_exists('MadExtra_Citations_Builder')) {
 
         public static function activate()
         {
-            self::maybe_sync_capabilities();
-            self::maybe_seed_defaults();
+            try {
+                self::maybe_sync_capabilities();
+                self::maybe_seed_defaults();
+            } catch (Throwable $e) {
+                error_log('[MadExtra Citations] Builder activate error: ' . $e->getMessage());
+            }
         }
 
         public static function maybe_sync_capabilities()
         {
-            $version = get_option(self::CAPS_OPTION, '');
-            if (self::CAPS_VERSION === (string) $version) {
-                return;
-            }
-
-            $manager_caps = array(
-                'manage_citation_builder',
-                'manage_citation_templates',
-                'manage_citation_queries',
-                'manage_citation_forms',
-                'submit_citation_profiles',
-            );
-
-            $admin_caps = array_merge(
-                $manager_caps,
-                array(
-                    'manage_citation_relations',
-                )
-            );
-
-            $roles = array(
-                'citation_manager' => $manager_caps,
-                'citation_admin' => $admin_caps,
-                'administrator' => $admin_caps,
-            );
-
-            foreach ($roles as $role_slug => $caps) {
-                $role = get_role($role_slug);
-                if (!$role) {
-                    continue;
+            try {
+                $version = get_option(self::CAPS_OPTION, '');
+                if (self::CAPS_VERSION === (string) $version) {
+                    return;
                 }
-                foreach ($caps as $cap) {
-                    $role->add_cap($cap);
-                }
-            }
 
-            // Also grant builder caps to any custom admin-like role that has
-            // manage_options, so users do not need both admin + citation roles.
-            $roles_object = wp_roles();
-            if ($roles_object instanceof WP_Roles && !empty($roles_object->roles)) {
-                foreach ($roles_object->roles as $role_slug => $role_data) {
-                    $has_manage_options = !empty($role_data['capabilities']['manage_options']);
-                    if (!$has_manage_options) {
-                        continue;
-                    }
+                $manager_caps = array(
+                    'manage_citation_builder',
+                    'manage_citation_templates',
+                    'manage_citation_queries',
+                    'manage_citation_forms',
+                    'submit_citation_profiles',
+                );
 
+                $admin_caps = array_merge(
+                    $manager_caps,
+                    array(
+                        'manage_citation_relations',
+                    )
+                );
+
+                $roles = array(
+                    'citation_manager' => $manager_caps,
+                    'citation_admin' => $admin_caps,
+                    'administrator' => $admin_caps,
+                );
+
+                foreach ($roles as $role_slug => $caps) {
                     $role = get_role($role_slug);
                     if (!$role) {
                         continue;
                     }
-
-                    foreach ($admin_caps as $cap) {
+                    foreach ($caps as $cap) {
                         $role->add_cap($cap);
                     }
                 }
-            }
 
-            update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
+                // Also grant builder caps to any custom admin-like role that has
+                // manage_options, so users do not need both admin + citation roles.
+                $roles_object = wp_roles();
+                if ($roles_object instanceof WP_Roles && !empty($roles_object->roles)) {
+                    foreach ($roles_object->roles as $role_slug => $role_data) {
+                        $has_manage_options = !empty($role_data['capabilities']['manage_options']);
+                        if (!$has_manage_options) {
+                            continue;
+                        }
+
+                        $role = get_role($role_slug);
+                        if (!$role) {
+                            continue;
+                        }
+
+                        foreach ($admin_caps as $cap) {
+                            $role->add_cap($cap);
+                        }
+                    }
+                }
+
+                update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
+            } catch (Throwable $e) {
+                error_log('[MadExtra Citations] Builder cap sync error: ' . $e->getMessage());
+            }
         }
 
         public static function maybe_seed_defaults()

@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.2.3
+ * Version: 0.2.4
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -12,6 +12,32 @@
 
 if (!defined('ABSPATH')) {
     exit;
+}
+
+if (!function_exists('mec_builder_bootstrap_error_handler')) {
+    function mec_builder_bootstrap_error_handler($message)
+    {
+        if (!is_string($message) || '' === $message) {
+            return;
+        }
+
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            error_log('[MadExtra Citations] Builder bootstrap issue: ' . $message);
+        } else {
+            error_log('[MadExtra Citations] Builder bootstrap issue: ' . $message);
+        }
+
+        if (is_admin()) {
+            add_action('admin_notices', static function () use ($message) {
+                if (!current_user_can('manage_options')) {
+                    return;
+                }
+                echo '<div class="notice notice-error"><p><strong>MadExtra Citations:</strong> Builder module failed to load. ';
+                echo esc_html($message);
+                echo '</p></div>';
+            });
+        }
+    }
 }
 
 if (!class_exists('MadExtra_Citations_Plugin')) {
@@ -1717,12 +1743,20 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
 $mec_builder_file = __DIR__ . '/includes/class-mec-builder.php';
 if (file_exists($mec_builder_file)) {
-    require_once $mec_builder_file;
+    try {
+        require_once $mec_builder_file;
+    } catch (Throwable $e) {
+        mec_builder_bootstrap_error_handler($e->getMessage());
+    }
 }
 
 MadExtra_Citations_Plugin::bootstrap();
 if (class_exists('MadExtra_Citations_Builder')) {
-    MadExtra_Citations_Builder::bootstrap();
+    try {
+        MadExtra_Citations_Builder::bootstrap();
+    } catch (Throwable $e) {
+        mec_builder_bootstrap_error_handler($e->getMessage());
+    }
 }
 
 register_activation_hook(__FILE__, array('MadExtra_Citations_Plugin', 'activate'));
