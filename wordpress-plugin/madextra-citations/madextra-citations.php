@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and a public grouped directory via shortcode.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -54,7 +54,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const NOTICE_TRANSIENT = 'mec_admin_notice';
         const SHORTCODE = 'madextra_citations_directory';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.1.0';
+        const CAPS_VERSION = '1.1.1';
         const PUBLIC_SUBMIT_SHORTCODE = 'mec_public_submit_form';
         const LOGO_MAX_BYTES = 2097152;
 
@@ -75,6 +75,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_post_mec_public_submit', array(__CLASS__, 'handle_public_submit_request'));
             add_action('admin_post_nopriv_mec_public_submit', array(__CLASS__, 'handle_public_submit_request'));
             add_action('admin_init', array(__CLASS__, 'maybe_redirect_legacy_tools_page'));
+            add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_admin_assets'));
             add_action('admin_notices', array(__CLASS__, 'render_admin_notice'));
             add_action('admin_notices', array(__CLASS__, 'render_capability_debug_notice'));
             add_action('admin_init', array(__CLASS__, 'maybe_sync_capabilities'));
@@ -92,6 +93,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             self::register_roles_and_capabilities();
             update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
             self::maybe_create_directory_page();
+            self::maybe_create_public_submit_page();
             flush_rewrite_rules();
         }
 
@@ -108,6 +110,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             }
 
             self::register_roles_and_capabilities();
+            self::maybe_create_public_submit_page();
             update_option(self::CAPS_OPTION, self::CAPS_VERSION, false);
         }
 
@@ -419,6 +422,34 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             );
         }
 
+        private static function maybe_create_public_submit_page()
+        {
+            $existing = get_page_by_path('submit-citation');
+            if ($existing) {
+                return;
+            }
+
+            wp_insert_post(
+                array(
+                    'post_type'    => 'page',
+                    'post_status'  => 'publish',
+                    'post_title'   => 'Submit Citation',
+                    'post_name'    => 'submit-citation',
+                    'post_content' => '[' . self::PUBLIC_SUBMIT_SHORTCODE . ']',
+                )
+            );
+        }
+
+        public static function enqueue_admin_assets($hook)
+        {
+            $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+            if (!$screen || !isset($screen->post_type) || self::CPT !== $screen->post_type) {
+                return;
+            }
+
+            wp_enqueue_media();
+        }
+
         private static function status_options()
         {
             return array(
@@ -546,8 +577,25 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 <tr>
                     <th scope="row"><label for="mec_business_logo_id"><?php echo esc_html($fields['business_logo_id']['label']); ?></label></th>
                     <td>
+                        <?php
+                        $logo_id = (int) $values['business_logo_id'];
+                        $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'thumbnail') : '';
+                        ?>
+                        <div class="mec-logo-picker">
+                            <div class="mec-logo-preview">
+                                <?php if ($logo_url) : ?>
+                                    <img src="<?php echo esc_url($logo_url); ?>" alt="">
+                                <?php else : ?>
+                                    <span><?php esc_html_e('No logo selected', 'madextra-citations'); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <button type="button" class="button mec-select-logo"><?php esc_html_e('Choose Logo', 'madextra-citations'); ?></button>
+                                <button type="button" class="button mec-remove-logo"><?php esc_html_e('Remove Logo', 'madextra-citations'); ?></button>
+                            </div>
+                        </div>
                         <input type="number" class="small-text" id="mec_business_logo_id" name="mec[business_logo_id]" min="0" step="1" value="<?php echo esc_attr($values['business_logo_id']); ?>">
-                        <p class="description"><?php esc_html_e('Upload the logo in Media Library and paste the attachment ID here.', 'madextra-citations'); ?></p>
+                        <p class="description"><?php esc_html_e('Choose from the Media Library or paste an attachment ID.', 'madextra-citations'); ?></p>
                     </td>
                 </tr>
                 <tr>
@@ -624,7 +672,49 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             </table>
             <style>
                 #mec_markets, #mec_services { min-height: 140px; min-width: 280px; }
+                .mec-logo-picker { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
+                .mec-logo-preview { width:72px; height:72px; border:1px solid #cbd5e1; border-radius:8px; display:grid; place-items:center; background:#f8fafc; overflow:hidden; color:#64748b; font-size:11px; text-align:center; }
+                .mec-logo-preview img { width:100%; height:100%; object-fit:cover; display:block; }
             </style>
+            <script>
+                (function($) {
+                    if (!$ || typeof wp === 'undefined' || !wp.media) return;
+                    const picker = $('.mec-logo-picker');
+                    const input = $('#mec_business_logo_id');
+                    const preview = picker.find('.mec-logo-preview');
+                    let frame;
+
+                    picker.on('click', '.mec-select-logo', function(event) {
+                        event.preventDefault();
+                        if (frame) {
+                            frame.open();
+                            return;
+                        }
+
+                        frame = wp.media({
+                            title: <?php echo wp_json_encode(__('Choose Business Logo', 'madextra-citations')); ?>,
+                            button: { text: <?php echo wp_json_encode(__('Use this logo', 'madextra-citations')); ?> },
+                            multiple: false,
+                            library: { type: 'image' }
+                        });
+
+                        frame.on('select', function() {
+                            const attachment = frame.state().get('selection').first().toJSON();
+                            input.val(attachment.id || '');
+                            const url = (attachment.sizes && attachment.sizes.thumbnail ? attachment.sizes.thumbnail.url : attachment.url);
+                            preview.html('<img src="' + url + '" alt="">');
+                        });
+
+                        frame.open();
+                    });
+
+                    picker.on('click', '.mec-remove-logo', function(event) {
+                        event.preventDefault();
+                        input.val('0');
+                        preview.html('<span>' + <?php echo wp_json_encode(__('No logo selected', 'madextra-citations')); ?> + '</span>');
+                    });
+                })(window.jQuery);
+            </script>
             <?php
         }
 

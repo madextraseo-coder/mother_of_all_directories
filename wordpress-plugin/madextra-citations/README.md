@@ -108,10 +108,12 @@ Optional admin-only:
 ## Quick Deploy (Beginner Friendly)
 
 1. Set up WordPress on `directory.madextraseo.com` with SSL enabled.
-2. In this folder, zip the plugin directory as `madextra-citations.zip`.
+2. Use `wordpress-plugin/madextra-citations-wp-upload.zip` for wp-admin uploads.
 3. In WordPress admin, go to `Plugins > Add New > Upload Plugin`.
 4. Upload the zip, install, then activate.
-5. On activation, the plugin auto-creates a `Citations` page at `/citations/` with `[madextra_citations_directory]`.
+5. On activation, the plugin auto-creates:
+   - `Citations` at `/citations/` with `[madextra_citations_directory]`
+   - `Submit Citation` at `/submit-citation/` with `[mec_public_submit_form]`
 6. Go to `Citation Profiles` in wp-admin:
    - Add Markets and Services terms.
    - Add profiles manually or import CSV from `CSV Tools`.
