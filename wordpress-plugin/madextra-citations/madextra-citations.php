@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Citations Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Citation profile management with granular permissions, CSV import/export, REST endpoints, and searchable public directory pages.
- * Version: 0.6.3
+ * Version: 0.6.4
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         const SHORTCODE = 'madextra_citations_directory';
         const PROFILE_SHORTCODE = 'mec_public_profile';
         const CAPS_OPTION = 'mec_caps_version';
-        const CAPS_VERSION = '1.2.1';
+        const CAPS_VERSION = '1.2.2';
         const PUBLIC_SUBMIT_SHORTCODE = 'mec_public_submit_form';
         const STRIPE_RETURN_SHORTCODE = 'mec_stripe_return';
         const LOGO_MAX_BYTES = 2097152;
@@ -335,22 +335,20 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
         private static function cpt_capabilities()
         {
             return array(
-                // Keep admin access tied to one guaranteed capability to prevent
-                // host-specific role/cap collisions on wp-admin post-type screens.
-                'edit_post'              => 'manage_citation_profiles',
-                'read_post'              => 'manage_citation_profiles',
-                'delete_post'            => 'manage_citation_profiles',
-                'edit_posts'             => 'manage_citation_profiles',
-                'edit_others_posts'      => 'manage_citation_profiles',
-                'publish_posts'          => 'manage_citation_profiles',
-                'read_private_posts'     => 'manage_citation_profiles',
-                'delete_posts'           => 'manage_citation_profiles',
-                'delete_private_posts'   => 'manage_citation_profiles',
-                'delete_published_posts' => 'manage_citation_profiles',
-                'delete_others_posts'    => 'manage_citation_profiles',
-                'edit_private_posts'     => 'manage_citation_profiles',
-                'edit_published_posts'   => 'manage_citation_profiles',
-                'create_posts'           => 'manage_citation_profiles',
+                'edit_post'              => 'edit_citation_profile',
+                'read_post'              => 'read_citation_profile',
+                'delete_post'            => 'delete_citation_profile',
+                'edit_posts'             => 'edit_citation_profiles',
+                'edit_others_posts'      => 'edit_others_citation_profiles',
+                'publish_posts'          => 'publish_citation_profiles',
+                'read_private_posts'     => 'read_private_citation_profiles',
+                'delete_posts'           => 'delete_citation_profiles',
+                'delete_private_posts'   => 'delete_private_citation_profiles',
+                'delete_published_posts' => 'delete_published_citation_profiles',
+                'delete_others_posts'    => 'delete_others_citation_profiles',
+                'edit_private_posts'     => 'edit_private_citation_profiles',
+                'edit_published_posts'   => 'edit_published_citation_profiles',
+                'create_posts'           => 'create_citation_profiles',
             );
         }
 
