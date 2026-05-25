@@ -214,9 +214,9 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             if (empty($store['pages'])) {
                 $store['pages']['all-citations'] = array(
                     'id' => 'all-citations',
-                    'label' => 'All Citations Directory',
+                    'label' => 'All Directory Listings',
                     'description' => 'Flat searchable directory page without market-first grouping.',
-                    'page_title' => 'All Citations',
+                    'page_title' => 'All Directory Listings',
                     'page_slug' => 'all-citations',
                     'page_status' => 'publish',
                     'parent_page_id' => 0,
@@ -586,8 +586,8 @@ if (!class_exists('MadExtra_Citations_Builder')) {
         {
             add_submenu_page(
                 'edit.php?post_type=' . MadExtra_Citations_Plugin::CPT,
-                __('Citations Builder', 'madextra-citations'),
-                __('Citations Builder', 'madextra-citations'),
+                __('Directory Builder', 'madextra-citations'),
+                __('Directory Builder', 'madextra-citations'),
                 'read',
                 self::ADMIN_PAGE_SLUG,
                 array(__CLASS__, 'render_builder_page')
@@ -610,7 +610,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
             $notice = isset($_GET['mec_notice']) ? sanitize_text_field(wp_unslash($_GET['mec_notice'])) : '';
             ?>
             <div class="wrap">
-                <h1><?php esc_html_e('Citations Builder', 'madextra-citations'); ?></h1>
+                <h1><?php esc_html_e('Directory Builder', 'madextra-citations'); ?></h1>
                 <p><?php esc_html_e('Manage field groups, templates, queries, forms, directory pages, and relations visually from wp-admin.', 'madextra-citations'); ?></p>
                 <?php if ('saved' === $notice) : ?>
                     <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Builder item saved.', 'madextra-citations'); ?></p></div>
@@ -744,7 +744,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                     <th scope="row"><label for="mec_field_target"><?php esc_html_e('Target Object', 'madextra-citations'); ?></label></th>
                     <td>
                         <select id="mec_field_target" name="item[target]">
-                            <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::CPT); ?>" <?php selected($target, MadExtra_Citations_Plugin::CPT); ?>><?php esc_html_e('Citation Profile', 'madextra-citations'); ?></option>
+                            <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::CPT); ?>" <?php selected($target, MadExtra_Citations_Plugin::CPT); ?>><?php esc_html_e('Directory Profile', 'madextra-citations'); ?></option>
                             <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::TAX_MARKET); ?>" <?php selected($target, MadExtra_Citations_Plugin::TAX_MARKET); ?>><?php esc_html_e('Markets', 'madextra-citations'); ?></option>
                             <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::TAX_SERVICE); ?>" <?php selected($target, MadExtra_Citations_Plugin::TAX_SERVICE); ?>><?php esc_html_e('Services', 'madextra-citations'); ?></option>
                             <option value="user" <?php selected($target, 'user'); ?>><?php esc_html_e('Users', 'madextra-citations'); ?></option>
@@ -1032,7 +1032,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
         {
             ?>
             <select name="<?php echo esc_attr($name); ?>" id="<?php echo esc_attr($id); ?>">
-                <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::CPT); ?>" <?php selected($selected, MadExtra_Citations_Plugin::CPT); ?>><?php esc_html_e('Citation Profile', 'madextra-citations'); ?></option>
+                <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::CPT); ?>" <?php selected($selected, MadExtra_Citations_Plugin::CPT); ?>><?php esc_html_e('Directory Profile', 'madextra-citations'); ?></option>
                 <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::TAX_MARKET); ?>" <?php selected($selected, MadExtra_Citations_Plugin::TAX_MARKET); ?>><?php esc_html_e('Market Terms', 'madextra-citations'); ?></option>
                 <option value="<?php echo esc_attr(MadExtra_Citations_Plugin::TAX_SERVICE); ?>" <?php selected($selected, MadExtra_Citations_Plugin::TAX_SERVICE); ?>><?php esc_html_e('Service Terms', 'madextra-citations'); ?></option>
                 <option value="user" <?php selected($selected, 'user'); ?>><?php esc_html_e('Users', 'madextra-citations'); ?></option>
@@ -1138,7 +1138,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
         private static function generate_page_from_entity(array $entity)
         {
             $post_id = isset($entity['generated_page_id']) ? (int) $entity['generated_page_id'] : 0;
-            $page_title = isset($entity['page_title']) && '' !== $entity['page_title'] ? $entity['page_title'] : (isset($entity['label']) ? $entity['label'] : __('Citation Directory', 'madextra-citations'));
+            $page_title = isset($entity['page_title']) && '' !== $entity['page_title'] ? $entity['page_title'] : (isset($entity['label']) ? $entity['label'] : __('Directory Listing', 'madextra-citations'));
             $page_slug = isset($entity['page_slug']) ? sanitize_title($entity['page_slug']) : '';
             $page_status = isset($entity['page_status']) ? sanitize_key($entity['page_status']) : 'publish';
 
@@ -1529,7 +1529,7 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 return;
             }
             ?>
-            <h2><?php esc_html_e('Citation Builder User Fields', 'madextra-citations'); ?></h2>
+            <h2><?php esc_html_e('Directory Builder User Fields', 'madextra-citations'); ?></h2>
             <table class="form-table" role="presentation">
                 <tbody>
                 <?php foreach ($fields as $key => $field) : ?>
