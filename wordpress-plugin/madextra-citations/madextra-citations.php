@@ -81,6 +81,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
             add_action('admin_menu', array(__CLASS__, 'register_tools_submenu'));
             add_action('admin_menu', array(__CLASS__, 'register_premium_queue_submenu'));
+            add_action('admin_menu', array(__CLASS__, 'register_featured_manager_submenu'));
             add_action('admin_menu', array(__CLASS__, 'register_stripe_submenu'));
             add_action('admin_menu', array(__CLASS__, 'register_home_submenu'));
             add_action('admin_post_mec_export_csv', array(__CLASS__, 'handle_export_request'));
@@ -89,6 +90,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_post_mec_download_directory_import_errors', array(__CLASS__, 'handle_download_directory_import_errors'));
             add_action('admin_post_mec_premium_profile_action', array(__CLASS__, 'handle_premium_profile_action'));
             add_action('admin_post_mec_bulk_premium_profile_action', array(__CLASS__, 'handle_bulk_premium_profile_action'));
+            add_action('admin_post_mec_autofill_featured_slots', array(__CLASS__, 'handle_autofill_featured_slots'));
             add_action('admin_post_mec_save_stripe_settings', array(__CLASS__, 'handle_save_stripe_settings'));
             add_action('admin_post_mec_save_directory_home_settings', array(__CLASS__, 'handle_save_directory_home_settings'));
             add_action('admin_post_mec_public_submit', array(__CLASS__, 'handle_public_submit_request'));
@@ -122,6 +124,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             self::maybe_seed_stripe_settings();
             self::maybe_seed_home_settings();
             self::maybe_create_directory_page();
+            self::maybe_create_vertical_directory_pages();
             self::maybe_create_public_submit_page();
             self::maybe_create_stripe_return_page();
             self::maybe_create_home_page();
@@ -147,6 +150,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             self::maybe_seed_stripe_settings();
             self::maybe_seed_home_settings();
             self::maybe_create_directory_page();
+            self::maybe_create_vertical_directory_pages();
             self::maybe_create_public_submit_page();
             self::maybe_create_stripe_return_page();
             self::maybe_create_home_page();
@@ -464,9 +468,54 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'post_status'  => 'publish',
                     'post_title'   => 'Directory',
                     'post_name'    => 'directory',
-                    'post_content' => '[' . self::DIRECTORY_SHORTCODE . ']',
+                    'post_content' => '[' . self::DIRECTORY_SHORTCODE . ' show_filters="yes"]',
                 )
             );
+        }
+
+        private static function maybe_create_vertical_directory_pages()
+        {
+            if (!class_exists('MadExtra_Directory_Data')) {
+                return;
+            }
+
+            $parent = get_page_by_path('directory');
+            if (!$parent instanceof WP_Post) {
+                self::maybe_create_directory_page();
+                $parent = get_page_by_path('directory');
+            }
+            if (!$parent instanceof WP_Post) {
+                return;
+            }
+
+            $parent_id = (int) $parent->ID;
+            $verticals = MadExtra_Directory_Data::get_verticals();
+            foreach ($verticals as $vertical) {
+                $slug = isset($vertical['slug']) ? sanitize_title($vertical['slug']) : '';
+                if ('' === $slug) {
+                    continue;
+                }
+
+                $path = 'directory/' . $slug;
+                if (get_page_by_path($path)) {
+                    continue;
+                }
+
+                $title = isset($vertical['label']) && '' !== (string) $vertical['label']
+                    ? sanitize_text_field((string) $vertical['label'])
+                    : ucwords(str_replace('-', ' ', $slug));
+
+                wp_insert_post(
+                    array(
+                        'post_type' => 'page',
+                        'post_status' => 'publish',
+                        'post_parent' => $parent_id,
+                        'post_title' => $title,
+                        'post_name' => $slug,
+                        'post_content' => '[' . self::DIRECTORY_SHORTCODE . ' vertical="' . esc_attr($slug) . '" show_filters="yes"]',
+                    )
+                );
+            }
         }
 
         private static function maybe_create_public_submit_page()
@@ -699,6 +748,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'primary_cta_url'    => array('label' => __('Primary CTA URL', 'madextra-citations'), 'required' => false),
                 'secondary_cta_label' => array('label' => __('Secondary CTA Label', 'madextra-citations'), 'required' => false),
                 'secondary_cta_url'  => array('label' => __('Secondary CTA URL', 'madextra-citations'), 'required' => false),
+                'deep_link_booking_url' => array('label' => __('Booking Link URL', 'madextra-citations'), 'required' => false),
+                'deep_link_services_url' => array('label' => __('Services Link URL', 'madextra-citations'), 'required' => false),
+                'deep_link_offers_url' => array('label' => __('Offers Link URL', 'madextra-citations'), 'required' => false),
+                'deep_link_reviews_url' => array('label' => __('Reviews Link URL', 'madextra-citations'), 'required' => false),
+                'social_facebook_url' => array('label' => __('Facebook URL', 'madextra-citations'), 'required' => false),
+                'social_instagram_url' => array('label' => __('Instagram URL', 'madextra-citations'), 'required' => false),
+                'social_linkedin_url' => array('label' => __('LinkedIn URL', 'madextra-citations'), 'required' => false),
+                'social_youtube_url' => array('label' => __('YouTube URL', 'madextra-citations'), 'required' => false),
+                'social_tiktok_url' => array('label' => __('TikTok URL', 'madextra-citations'), 'required' => false),
                 'premium_hero_text'  => array('label' => __('Premium Hero Text', 'madextra-citations'), 'required' => false),
                 'premium_subheadline' => array('label' => __('Premium Subheadline', 'madextra-citations'), 'required' => false),
                 'extended_about_copy' => array('label' => __('Extended About Copy', 'madextra-citations'), 'required' => false),
@@ -925,6 +983,17 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         <p><input type="text" class="large-text" name="mec[gallery_media_ids]" value="<?php echo esc_attr($values['gallery_media_ids']); ?>" placeholder="<?php esc_attr_e('Gallery media IDs comma-separated', 'madextra-citations'); ?>"></p>
                         <p><input type="text" class="regular-text" name="mec[primary_cta_label]" value="<?php echo esc_attr($values['primary_cta_label']); ?>" placeholder="<?php esc_attr_e('Primary CTA label', 'madextra-citations'); ?>"> <input type="url" class="large-text code" name="mec[primary_cta_url]" value="<?php echo esc_attr($values['primary_cta_url']); ?>" placeholder="<?php esc_attr_e('Primary CTA URL', 'madextra-citations'); ?>"></p>
                         <p><input type="text" class="regular-text" name="mec[secondary_cta_label]" value="<?php echo esc_attr($values['secondary_cta_label']); ?>" placeholder="<?php esc_attr_e('Secondary CTA label', 'madextra-citations'); ?>"> <input type="url" class="large-text code" name="mec[secondary_cta_url]" value="<?php echo esc_attr($values['secondary_cta_url']); ?>" placeholder="<?php esc_attr_e('Secondary CTA URL', 'madextra-citations'); ?>"></p>
+                        <p><strong><?php esc_html_e('Fixed Deep Links', 'madextra-citations'); ?></strong></p>
+                        <p><input type="url" class="large-text code" name="mec[deep_link_booking_url]" value="<?php echo esc_attr($values['deep_link_booking_url']); ?>" placeholder="<?php esc_attr_e('Booking URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[deep_link_services_url]" value="<?php echo esc_attr($values['deep_link_services_url']); ?>" placeholder="<?php esc_attr_e('Services URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[deep_link_offers_url]" value="<?php echo esc_attr($values['deep_link_offers_url']); ?>" placeholder="<?php esc_attr_e('Offers URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[deep_link_reviews_url]" value="<?php echo esc_attr($values['deep_link_reviews_url']); ?>" placeholder="<?php esc_attr_e('Reviews URL', 'madextra-citations'); ?>"></p>
+                        <p><strong><?php esc_html_e('Core Social URLs', 'madextra-citations'); ?></strong></p>
+                        <p><input type="url" class="large-text code" name="mec[social_facebook_url]" value="<?php echo esc_attr($values['social_facebook_url']); ?>" placeholder="<?php esc_attr_e('Facebook URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[social_instagram_url]" value="<?php echo esc_attr($values['social_instagram_url']); ?>" placeholder="<?php esc_attr_e('Instagram URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[social_linkedin_url]" value="<?php echo esc_attr($values['social_linkedin_url']); ?>" placeholder="<?php esc_attr_e('LinkedIn URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[social_youtube_url]" value="<?php echo esc_attr($values['social_youtube_url']); ?>" placeholder="<?php esc_attr_e('YouTube URL', 'madextra-citations'); ?>"></p>
+                        <p><input type="url" class="large-text code" name="mec[social_tiktok_url]" value="<?php echo esc_attr($values['social_tiktok_url']); ?>" placeholder="<?php esc_attr_e('TikTok URL', 'madextra-citations'); ?>"></p>
                         <p><textarea id="mec_premium_notes" name="mec[premium_notes]" rows="4" class="large-text" placeholder="<?php esc_attr_e('Premium notes (admin only)', 'madextra-citations'); ?>"><?php echo esc_textarea($values['premium_notes']); ?></textarea></p>
                     </td>
                 </tr>
@@ -941,7 +1010,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                             <option value="2" <?php selected((int) $values['featured_order'], 2); ?>><?php esc_html_e('Featured position 2', 'madextra-citations'); ?></option>
                             <option value="3" <?php selected((int) $values['featured_order'], 3); ?>><?php esc_html_e('Featured position 3', 'madextra-citations'); ?></option>
                         </select>
-                        <p class="description"><?php esc_html_e('Each city can have up to three featured profiles.', 'madextra-citations'); ?></p>
+                        <p class="description"><?php esc_html_e('Each city + state can have up to three featured premium profiles.', 'madextra-citations'); ?></p>
                     </td>
                 </tr>
                 <tr>
@@ -1055,7 +1124,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $market_ids = array_values(array_filter($market_ids));
             $service_ids = array_values(array_filter($service_ids));
 
-            $featured_validation = self::validate_featured_slot($post_id, $clean, $market_ids);
+            $featured_validation = self::validate_featured_slot($post_id, $clean, $market_ids, $service_ids);
             if (is_wp_error($featured_validation)) {
                 self::queue_notice($featured_validation->get_error_message(), 'error');
                 return;
@@ -1269,6 +1338,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'primary_cta_url'    => isset($payload['primary_cta_url']) ? esc_url_raw($payload['primary_cta_url']) : '',
                 'secondary_cta_label' => isset($payload['secondary_cta_label']) ? sanitize_text_field($payload['secondary_cta_label']) : '',
                 'secondary_cta_url'  => isset($payload['secondary_cta_url']) ? esc_url_raw($payload['secondary_cta_url']) : '',
+                'deep_link_booking_url' => isset($payload['deep_link_booking_url']) ? esc_url_raw($payload['deep_link_booking_url']) : '',
+                'deep_link_services_url' => isset($payload['deep_link_services_url']) ? esc_url_raw($payload['deep_link_services_url']) : '',
+                'deep_link_offers_url' => isset($payload['deep_link_offers_url']) ? esc_url_raw($payload['deep_link_offers_url']) : '',
+                'deep_link_reviews_url' => isset($payload['deep_link_reviews_url']) ? esc_url_raw($payload['deep_link_reviews_url']) : '',
+                'social_facebook_url' => isset($payload['social_facebook_url']) ? esc_url_raw($payload['social_facebook_url']) : '',
+                'social_instagram_url' => isset($payload['social_instagram_url']) ? esc_url_raw($payload['social_instagram_url']) : '',
+                'social_linkedin_url' => isset($payload['social_linkedin_url']) ? esc_url_raw($payload['social_linkedin_url']) : '',
+                'social_youtube_url' => isset($payload['social_youtube_url']) ? esc_url_raw($payload['social_youtube_url']) : '',
+                'social_tiktok_url' => isset($payload['social_tiktok_url']) ? esc_url_raw($payload['social_tiktok_url']) : '',
                 'premium_hero_text'  => isset($payload['premium_hero_text']) ? sanitize_text_field($payload['premium_hero_text']) : '',
                 'premium_subheadline' => isset($payload['premium_subheadline']) ? sanitize_text_field($payload['premium_subheadline']) : '',
                 'extended_about_copy' => isset($payload['extended_about_copy']) ? sanitize_textarea_field($payload['extended_about_copy']) : '',
@@ -1758,6 +1836,18 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             );
         }
 
+        public static function register_featured_manager_submenu()
+        {
+            add_submenu_page(
+                'edit.php?post_type=' . self::CPT,
+                __('Featured Manager', 'madextra-citations'),
+                __('Featured Manager', 'madextra-citations'),
+                'read',
+                'mec-featured-manager',
+                array(__CLASS__, 'render_featured_manager_page')
+            );
+        }
+
         private static function premium_action_url($post_id, $task)
         {
             return wp_nonce_url(
@@ -1795,6 +1885,36 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'page' => 'mec-premium-queue',
                 ),
                 admin_url('edit.php')
+            );
+        }
+
+        private static function featured_manager_url(array $args = array())
+        {
+            $url = add_query_arg(
+                array(
+                    'post_type' => self::CPT,
+                    'page' => 'mec-featured-manager',
+                ),
+                admin_url('edit.php')
+            );
+
+            if ($args) {
+                $url = add_query_arg($args, $url);
+            }
+
+            return $url;
+        }
+
+        private static function featured_autofill_url()
+        {
+            return wp_nonce_url(
+                add_query_arg(
+                    array(
+                        'action' => 'mec_autofill_featured_slots',
+                    ),
+                    admin_url('admin-post.php')
+                ),
+                'mec_autofill_featured_slots'
             );
         }
 
@@ -2035,6 +2155,350 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 </script>
             </div>
             <?php
+        }
+
+        public static function render_featured_manager_page()
+        {
+            if (!self::can_manage_premium_queue()) {
+                wp_die(esc_html__('You do not have permission to view this page.', 'madextra-citations'));
+            }
+
+            $search = isset($_GET['mec_featured_q']) ? sanitize_text_field(wp_unslash($_GET['mec_featured_q'])) : '';
+            $query = new WP_Query(
+                array(
+                    'post_type' => self::CPT,
+                    'post_status' => array('publish', 'draft', 'pending', 'private'),
+                    'posts_per_page' => -1,
+                    'fields' => 'ids',
+                    'orderby' => 'title',
+                    'order' => 'ASC',
+                    'no_found_rows' => true,
+                    'meta_query' => array(
+                        array(
+                            'key' => self::META_PREFIX . 'is_premium',
+                            'value' => '1',
+                        ),
+                    ),
+                )
+            );
+
+            $groups = array();
+            $unscoped = array();
+            foreach ((array) $query->posts as $post_id) {
+                $post_id = (int) $post_id;
+                if ($post_id <= 0) {
+                    continue;
+                }
+
+                $page_id = (int) get_post_meta($post_id, self::META_PREFIX . 'public_profile_page_id', true);
+                $is_featured = '1' === (string) get_post_meta($post_id, self::META_PREFIX . 'is_featured', true);
+                $slot = (int) get_post_meta($post_id, self::META_PREFIX . 'featured_order', true);
+                if (!$is_featured || $slot < 1 || $slot > 3) {
+                    $slot = 0;
+                }
+                $candidate = array(
+                    'id' => $post_id,
+                    'title' => get_the_title($post_id),
+                    'slot' => $slot,
+                    'is_featured' => $slot > 0,
+                    'edit_url' => get_edit_post_link($post_id, ''),
+                    'page_id' => $page_id,
+                    'page_url' => $page_id > 0 ? get_permalink($page_id) : '',
+                );
+
+                $scope = self::profile_location_scope($post_id);
+                if ('' === $scope['city_norm'] || '' === $scope['state_norm']) {
+                    $unscoped[] = $candidate;
+                    continue;
+                }
+
+                $group_key = $scope['city_norm'] . '|' . $scope['state_norm'];
+                if (!isset($groups[$group_key])) {
+                    $groups[$group_key] = array(
+                        'label' => $scope['label'],
+                        'city' => $scope['city'],
+                        'state' => $scope['state'],
+                        'candidates' => array(),
+                        'slots' => array(1 => null, 2 => null, 3 => null),
+                    );
+                }
+
+                $groups[$group_key]['candidates'][] = $candidate;
+                if ($candidate['is_featured'] && $candidate['slot'] > 0 && $candidate['slot'] <= 3 && empty($groups[$group_key]['slots'][$candidate['slot']])) {
+                    $groups[$group_key]['slots'][$candidate['slot']] = $candidate;
+                }
+            }
+
+            foreach ($groups as &$group) {
+                usort(
+                    $group['candidates'],
+                    static function ($a, $b) {
+                        return strcasecmp((string) $a['title'], (string) $b['title']);
+                    }
+                );
+            }
+            unset($group);
+
+            if ('' !== $search) {
+                $needle = strtolower($search);
+                $groups = array_filter(
+                    $groups,
+                    static function ($group) use ($needle) {
+                        if (false !== strpos(strtolower((string) $group['label']), $needle)) {
+                            return true;
+                        }
+                        foreach ((array) $group['candidates'] as $candidate) {
+                            if (false !== strpos(strtolower((string) $candidate['title']), $needle)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                );
+                $unscoped = array_values(
+                    array_filter(
+                        $unscoped,
+                        static function ($candidate) use ($needle) {
+                            return false !== strpos(strtolower((string) $candidate['title']), $needle);
+                        }
+                    )
+                );
+            }
+
+            uasort(
+                $groups,
+                static function ($a, $b) {
+                    return strcasecmp((string) $a['label'], (string) $b['label']);
+                }
+            );
+            ?>
+            <div class="wrap">
+                <h1><?php esc_html_e('Featured Manager', 'madextra-citations'); ?></h1>
+                <p><?php esc_html_e('Manage up to 3 featured premium profiles per city + state. Featured and premium listings appear before claimed/basic in the directory.', 'madextra-citations'); ?></p>
+
+                <form method="get" style="margin:0 0 12px;display:flex;gap:8px;align-items:center;">
+                    <input type="hidden" name="post_type" value="<?php echo esc_attr(self::CPT); ?>">
+                    <input type="hidden" name="page" value="mec-featured-manager">
+                    <input type="search" class="regular-text" name="mec_featured_q" value="<?php echo esc_attr($search); ?>" placeholder="<?php esc_attr_e('Search city, state, or business...', 'madextra-citations'); ?>">
+                    <button class="button button-primary" type="submit"><?php esc_html_e('Filter', 'madextra-citations'); ?></button>
+                    <?php if ('' !== $search) : ?>
+                        <a class="button" href="<?php echo esc_url(self::featured_manager_url()); ?>"><?php esc_html_e('Reset', 'madextra-citations'); ?></a>
+                    <?php endif; ?>
+                </form>
+                <p style="margin:0 0 14px;">
+                    <a class="button button-secondary" href="<?php echo esc_url(self::featured_autofill_url()); ?>" onclick="return confirm('<?php echo esc_js(__('Auto-fill will reset featured slots and assign top 3 premium profiles per city/state using reviews, rating, then name. Continue?', 'madextra-citations')); ?>');">
+                        <?php esc_html_e('Auto Fill Top 3 Per City/State', 'madextra-citations'); ?>
+                    </a>
+                </p>
+
+                <?php if (!$groups && !$unscoped) : ?>
+                    <div class="notice notice-info"><p><?php esc_html_e('No premium profiles matched the current filter.', 'madextra-citations'); ?></p></div>
+                <?php else : ?>
+                    <?php if ($groups) : ?>
+                        <table class="widefat striped">
+                            <thead>
+                                <tr>
+                                    <th style="width:18%;"><?php esc_html_e('City / State', 'madextra-citations'); ?></th>
+                                    <th style="width:13%;"><?php esc_html_e('Slot 1', 'madextra-citations'); ?></th>
+                                    <th style="width:13%;"><?php esc_html_e('Slot 2', 'madextra-citations'); ?></th>
+                                    <th style="width:13%;"><?php esc_html_e('Slot 3', 'madextra-citations'); ?></th>
+                                    <th><?php esc_html_e('Premium Profiles', 'madextra-citations'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($groups as $group) : ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo esc_html($group['label']); ?></strong>
+                                            <div style="margin-top:4px;color:#50575e;"><?php echo esc_html(sprintf(_n('%d premium profile', '%d premium profiles', count($group['candidates']), 'madextra-citations'), count($group['candidates']))); ?></div>
+                                        </td>
+                                        <?php foreach (array(1, 2, 3) as $slot_number) : ?>
+                                            <td>
+                                                <?php $assigned = isset($group['slots'][$slot_number]) ? $group['slots'][$slot_number] : null; ?>
+                                                <?php if ($assigned) : ?>
+                                                    <strong><?php echo esc_html($assigned['title']); ?></strong>
+                                                    <div style="margin-top:6px;">
+                                                        <a href="<?php echo esc_url($assigned['edit_url']); ?>"><?php esc_html_e('Edit', 'madextra-citations'); ?></a>
+                                                        <span> | </span>
+                                                        <a href="<?php echo esc_url(self::featured_slot_url($assigned['id'], 0, 'mec-featured-manager')); ?>"><?php esc_html_e('Remove', 'madextra-citations'); ?></a>
+                                                    </div>
+                                                <?php else : ?>
+                                                    <span style="color:#6b7280;"><?php esc_html_e('Unassigned', 'madextra-citations'); ?></span>
+                                                <?php endif; ?>
+                                            </td>
+                                        <?php endforeach; ?>
+                                        <td>
+                                            <div style="display:grid;gap:8px;max-height:240px;overflow:auto;padding-right:4px;">
+                                                <?php foreach ((array) $group['candidates'] as $candidate) : ?>
+                                                    <div style="border:1px solid #dcdcde;border-radius:6px;padding:8px;">
+                                                        <strong><?php echo esc_html($candidate['title']); ?></strong>
+                                                        <div style="margin:4px 0;color:#50575e;">
+                                                            <?php
+                                                            if ($candidate['is_featured']) {
+                                                                echo esc_html(sprintf(__('Currently featured in slot %d', 'madextra-citations'), (int) $candidate['slot']));
+                                                            } else {
+                                                                esc_html_e('Not featured', 'madextra-citations');
+                                                            }
+                                                            ?>
+                                                        </div>
+                                                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                                                            <a class="button button-small" href="<?php echo esc_url(self::featured_slot_url($candidate['id'], 1, 'mec-featured-manager')); ?>"><?php esc_html_e('Set 1', 'madextra-citations'); ?></a>
+                                                            <a class="button button-small" href="<?php echo esc_url(self::featured_slot_url($candidate['id'], 2, 'mec-featured-manager')); ?>"><?php esc_html_e('Set 2', 'madextra-citations'); ?></a>
+                                                            <a class="button button-small" href="<?php echo esc_url(self::featured_slot_url($candidate['id'], 3, 'mec-featured-manager')); ?>"><?php esc_html_e('Set 3', 'madextra-citations'); ?></a>
+                                                            <?php if ($candidate['is_featured']) : ?>
+                                                                <a class="button button-small" href="<?php echo esc_url(self::featured_slot_url($candidate['id'], 0, 'mec-featured-manager')); ?>"><?php esc_html_e('Remove', 'madextra-citations'); ?></a>
+                                                            <?php endif; ?>
+                                                            <a class="button button-small" href="<?php echo esc_url($candidate['edit_url']); ?>"><?php esc_html_e('Edit', 'madextra-citations'); ?></a>
+                                                            <?php if (!empty($candidate['page_url'])) : ?>
+                                                                <a class="button button-small" href="<?php echo esc_url($candidate['page_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('View Page', 'madextra-citations'); ?></a>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+
+                    <?php if ($unscoped) : ?>
+                        <h2 style="margin-top:20px;"><?php esc_html_e('Premium Profiles Missing City/State', 'madextra-citations'); ?></h2>
+                        <p><?php esc_html_e('These profiles cannot be featured until both city and state are set on the profile/business data.', 'madextra-citations'); ?></p>
+                        <ul>
+                            <?php foreach ($unscoped as $candidate) : ?>
+                                <li>
+                                    <strong><?php echo esc_html($candidate['title']); ?></strong>
+                                    <span> - </span>
+                                    <a href="<?php echo esc_url($candidate['edit_url']); ?>"><?php esc_html_e('Edit Profile', 'madextra-citations'); ?></a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+            <?php
+        }
+
+        public static function handle_autofill_featured_slots()
+        {
+            if (!self::can_manage_premium_queue()) {
+                wp_die(esc_html__('You do not have permission to manage featured slots.', 'madextra-citations'));
+            }
+
+            check_admin_referer('mec_autofill_featured_slots');
+
+            $query = new WP_Query(
+                array(
+                    'post_type' => self::CPT,
+                    'post_status' => array('publish', 'draft', 'pending', 'private'),
+                    'posts_per_page' => -1,
+                    'fields' => 'ids',
+                    'no_found_rows' => true,
+                    'meta_query' => array(
+                        array(
+                            'key' => self::META_PREFIX . 'is_premium',
+                            'value' => '1',
+                        ),
+                    ),
+                )
+            );
+
+            $groups = array();
+            $total_candidates = 0;
+            foreach ((array) $query->posts as $post_id) {
+                $post_id = (int) $post_id;
+                if ($post_id <= 0) {
+                    continue;
+                }
+
+                $scope = self::profile_location_scope($post_id);
+                if ('' === $scope['city_norm'] || '' === $scope['state_norm']) {
+                    continue;
+                }
+
+                $business = class_exists('MadExtra_Directory_Data')
+                    ? MadExtra_Directory_Data::get_business_by_profile($post_id)
+                    : array();
+                $reviews = isset($business['reviews_count']) ? (int) $business['reviews_count'] : 0;
+                $rating = isset($business['average_rating']) ? (float) $business['average_rating'] : 0.0;
+                $title = get_the_title($post_id);
+
+                $group_key = $scope['city_norm'] . '|' . $scope['state_norm'];
+                if (!isset($groups[$group_key])) {
+                    $groups[$group_key] = array();
+                }
+
+                $groups[$group_key][] = array(
+                    'post_id' => $post_id,
+                    'reviews' => $reviews,
+                    'rating' => $rating,
+                    'title' => $title ? $title : '',
+                );
+                $total_candidates++;
+            }
+
+            $changed_profiles = 0;
+            $assigned_slots = 0;
+            foreach ($groups as $group_key => $candidates) {
+                usort(
+                    $candidates,
+                    static function ($a, $b) {
+                        if ((int) $a['reviews'] !== (int) $b['reviews']) {
+                            return ((int) $a['reviews'] > (int) $b['reviews']) ? -1 : 1;
+                        }
+                        if ((float) $a['rating'] !== (float) $b['rating']) {
+                            return ((float) $a['rating'] > (float) $b['rating']) ? -1 : 1;
+                        }
+                        return strcasecmp((string) $a['title'], (string) $b['title']);
+                    }
+                );
+
+                $ranked_ids = array_values(array_map('intval', wp_list_pluck($candidates, 'post_id')));
+                $top_ids = array_slice($ranked_ids, 0, 3);
+                $top_lookup = array();
+                foreach ($top_ids as $idx => $top_id) {
+                    $top_lookup[(int) $top_id] = $idx + 1;
+                }
+
+                foreach ($ranked_ids as $candidate_id) {
+                    $new_slot = isset($top_lookup[$candidate_id]) ? (int) $top_lookup[$candidate_id] : 0;
+                    $new_featured = $new_slot > 0 ? '1' : '0';
+                    $old_featured = (string) get_post_meta($candidate_id, self::META_PREFIX . 'is_featured', true);
+                    $old_slot = (int) get_post_meta($candidate_id, self::META_PREFIX . 'featured_order', true);
+                    if ($old_slot < 1 || $old_slot > 3 || '1' !== $old_featured) {
+                        $old_slot = 0;
+                    }
+
+                    if ($old_featured !== $new_featured || $old_slot !== $new_slot) {
+                        update_post_meta($candidate_id, self::META_PREFIX . 'is_featured', $new_featured);
+                        update_post_meta($candidate_id, self::META_PREFIX . 'featured_order', (string) $new_slot);
+                        $changed_profiles++;
+                    }
+
+                    if ($new_slot > 0) {
+                        $assigned_slots++;
+                    }
+                }
+            }
+
+            self::queue_notice(
+                sprintf(
+                    __('Auto-fill complete: %1$d city/state groups processed, %2$d featured slots assigned, %3$d profiles updated.', 'madextra-citations'),
+                    (int) count($groups),
+                    (int) $assigned_slots,
+                    (int) $changed_profiles
+                ),
+                'success'
+            );
+
+            if (0 === $total_candidates) {
+                self::queue_notice(__('No premium profiles with valid city/state were available for auto-fill.', 'madextra-citations'), 'warning');
+            }
+
+            wp_safe_redirect(self::featured_manager_url());
+            exit;
         }
 
         public static function handle_premium_profile_action()
@@ -2738,7 +3202,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 return $duplicate_validation;
             }
 
-            $featured_validation = self::validate_featured_slot($existing, $clean, $market_ids);
+            $featured_validation = self::validate_featured_slot($existing, $clean, $market_ids, $service_ids);
             if (is_wp_error($featured_validation)) {
                 return $featured_validation;
             }
@@ -2799,6 +3263,21 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             if (!empty($clean['secondary_cta_url']) && !wp_http_validate_url($clean['secondary_cta_url'])) {
                 return new WP_Error('invalid_secondary_cta_url', __('Invalid secondary CTA URL.', 'madextra-citations'));
             }
+            foreach (array(
+                'deep_link_booking_url',
+                'deep_link_services_url',
+                'deep_link_offers_url',
+                'deep_link_reviews_url',
+                'social_facebook_url',
+                'social_instagram_url',
+                'social_linkedin_url',
+                'social_youtube_url',
+                'social_tiktok_url',
+            ) as $url_key) {
+                if (!empty($clean[$url_key]) && !wp_http_validate_url($clean[$url_key])) {
+                    return new WP_Error('invalid_' . $url_key, sprintf(__('Invalid URL for %s.', 'madextra-citations'), $url_key));
+                }
+            }
             if (!empty($clean['business_email']) && !is_email($clean['business_email'])) {
                 return new WP_Error('invalid_business_email', __('Invalid business_email. Please provide a valid email address.', 'madextra-citations'));
             }
@@ -2815,89 +3294,101 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             return true;
         }
 
-        public static function validate_featured_slot($post_id, array $clean, array $market_ids)
+        public static function validate_featured_slot($post_id, array $clean, array $market_ids, array $service_ids = array())
         {
             if (empty($clean['is_featured']) || '1' !== (string) $clean['is_featured']) {
                 return true;
             }
 
-            $market_ids = array_values(array_unique(array_filter(array_map('intval', $market_ids))));
-            if (!$market_ids) {
-                return new WP_Error('featured_market_required', __('Featured profiles must be assigned to at least one city/market.', 'madextra-citations'));
-            }
-
             $featured_order = isset($clean['featured_order']) ? (int) $clean['featured_order'] : 1;
             $featured_order = min(3, max(1, $featured_order));
 
-            foreach ($market_ids as $market_id) {
-                $term = get_term($market_id, self::TAX_MARKET);
-                $market_name = (!is_wp_error($term) && $term && !empty($term->name)) ? $term->name : __('this city', 'madextra-citations');
+            if (!self::is_profile_premium((int) $post_id, $clean)) {
+                return new WP_Error(
+                    'featured_requires_premium',
+                    __('Only premium profiles can be featured.', 'madextra-citations')
+                );
+            }
 
-                $base_query = array(
+            $scope = self::profile_location_scope((int) $post_id, $clean);
+            if ('' === $scope['city_norm'] || '' === $scope['state_norm']) {
+                return new WP_Error(
+                    'featured_location_required',
+                    __('Featured profiles require both city and state.', 'madextra-citations')
+                );
+            }
+
+            $candidate_ids = get_posts(
+                array(
                     'post_type'      => self::CPT,
                     'post_status'    => array('publish', 'draft', 'pending', 'private'),
-                    'posts_per_page' => 4,
+                    'posts_per_page' => -1,
                     'fields'         => 'ids',
                     'post__not_in'   => $post_id ? array((int) $post_id) : array(),
-                    'tax_query'      => array(
-                        array(
-                            'taxonomy' => self::TAX_MARKET,
-                            'field'    => 'term_id',
-                            'terms'    => (int) $market_id,
-                        ),
-                    ),
                     'meta_query'     => array(
                         array(
                             'key'   => self::META_PREFIX . 'is_featured',
                             'value' => '1',
                         ),
                     ),
-                );
+                )
+            );
 
-                $count_query = new WP_Query($base_query);
-                if (count($count_query->posts) >= 3) {
-                    return new WP_Error(
-                        'featured_city_limit',
-                        sprintf(
-                            /* translators: %s city/market name */
-                            __('%s already has 3 featured profiles. Remove one before adding another.', 'madextra-citations'),
-                            $market_name
-                        )
-                    );
+            $scope_count = 0;
+            foreach ((array) $candidate_ids as $candidate_id) {
+                $candidate_id = (int) $candidate_id;
+                if ($candidate_id <= 0 || !self::is_profile_premium($candidate_id)) {
+                    continue;
                 }
 
-                $slot_query_args = $base_query;
-                $slot_query_args['posts_per_page'] = 1;
-                $slot_query_args['meta_query'][] = array(
-                    'key'   => self::META_PREFIX . 'featured_order',
-                    'value' => (string) $featured_order,
-                );
-                $slot_query = new WP_Query($slot_query_args);
-                if (!empty($slot_query->posts)) {
+                $candidate_scope = self::profile_location_scope($candidate_id);
+                if (
+                    $candidate_scope['city_norm'] !== $scope['city_norm'] ||
+                    $candidate_scope['state_norm'] !== $scope['state_norm']
+                ) {
+                    continue;
+                }
+
+                $scope_count++;
+                $candidate_slot = (int) get_post_meta($candidate_id, self::META_PREFIX . 'featured_order', true);
+                if ($candidate_slot === $featured_order) {
                     return new WP_Error(
                         'featured_slot_taken',
                         sprintf(
-                            /* translators: %1$d featured slot number, %2$s city/market name */
                             __('Featured position %1$d is already used in %2$s.', 'madextra-citations'),
                             $featured_order,
-                            $market_name
+                            $scope['label'] ? $scope['label'] : __('this city', 'madextra-citations')
                         )
                     );
                 }
             }
 
+            if ($scope_count >= 3) {
+                return new WP_Error(
+                    'featured_city_limit',
+                    sprintf(
+                        __('%1$s already has 3 featured premium profiles. Remove one before adding another.', 'madextra-citations'),
+                        $scope['label'] ? $scope['label'] : __('this city', 'madextra-citations')
+                    )
+                );
+            }
+
             return true;
         }
 
-        private static function featured_slot_url($post_id, $slot)
+        private static function featured_slot_url($post_id, $slot, $redirect_page = '')
         {
+            $args = array(
+                'action'  => 'mec_set_featured_slot',
+                'post_id' => (int) $post_id,
+                'slot'    => (int) $slot,
+            );
+            if ($redirect_page) {
+                $args['redirect'] = sanitize_key($redirect_page);
+            }
             return wp_nonce_url(
                 add_query_arg(
-                    array(
-                        'action'  => 'mec_set_featured_slot',
-                        'post_id' => (int) $post_id,
-                        'slot'    => (int) $slot,
-                    ),
+                    $args,
                     admin_url('admin-post.php')
                 ),
                 'mec_set_featured_slot_' . (int) $post_id . '_' . (int) $slot
@@ -2939,13 +3430,18 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 $market_ids = array();
             }
             $market_ids = array_values(array_filter(array_map('intval', (array) $market_ids)));
+            $service_ids = wp_get_object_terms($post_id, self::TAX_SERVICE, array('fields' => 'ids'));
+            if (is_wp_error($service_ids)) {
+                $service_ids = array();
+            }
+            $service_ids = array_values(array_filter(array_map('intval', (array) $service_ids)));
 
             $clean = array(
                 'is_featured' => $slot > 0 ? '1' : '0',
                 'featured_order' => (string) $slot,
             );
 
-            $validation = self::validate_featured_slot($post_id, $clean, $market_ids);
+            $validation = self::validate_featured_slot($post_id, $clean, $market_ids, $service_ids);
             if (is_wp_error($validation)) {
                 self::queue_notice($validation->get_error_message(), 'error');
             } else {
@@ -2959,14 +3455,19 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 );
             }
 
-            wp_safe_redirect(
-                add_query_arg(
-                    array(
-                        'post_type' => self::CPT,
-                    ),
-                    admin_url('edit.php')
-                )
-            );
+            $redirect_page = isset($_GET['redirect']) ? sanitize_key(wp_unslash($_GET['redirect'])) : '';
+            if ('mec-featured-manager' === $redirect_page) {
+                wp_safe_redirect(self::featured_manager_url());
+            } else {
+                wp_safe_redirect(
+                    add_query_arg(
+                        array(
+                            'post_type' => self::CPT,
+                        ),
+                        admin_url('edit.php')
+                    )
+                );
+            }
             exit;
         }
 
@@ -3300,6 +3801,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'primary_cta_url',
                 'secondary_cta_label',
                 'secondary_cta_url',
+                'deep_link_booking_url',
+                'deep_link_services_url',
+                'deep_link_offers_url',
+                'deep_link_reviews_url',
+                'social_facebook_url',
+                'social_instagram_url',
+                'social_linkedin_url',
+                'social_youtube_url',
+                'social_tiktok_url',
                 'premium_hero_text',
                 'premium_subheadline',
                 'extended_about_copy',
@@ -3398,6 +3908,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     get_post_meta($post_id, self::META_PREFIX . 'primary_cta_url', true),
                     get_post_meta($post_id, self::META_PREFIX . 'secondary_cta_label', true),
                     get_post_meta($post_id, self::META_PREFIX . 'secondary_cta_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'deep_link_booking_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'deep_link_services_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'deep_link_offers_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'deep_link_reviews_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'social_facebook_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'social_instagram_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'social_linkedin_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'social_youtube_url', true),
+                    get_post_meta($post_id, self::META_PREFIX . 'social_tiktok_url', true),
                     get_post_meta($post_id, self::META_PREFIX . 'premium_hero_text', true),
                     get_post_meta($post_id, self::META_PREFIX . 'premium_subheadline', true),
                     get_post_meta($post_id, self::META_PREFIX . 'extended_about_copy', true),
@@ -3739,12 +4258,94 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             return implode(', ', $parts);
         }
 
+        private static function normalize_location_token($value)
+        {
+            return strtolower(trim(sanitize_text_field((string) $value)));
+        }
+
+        private static function profile_location_scope($post_id, array $clean = array())
+        {
+            $city = '';
+            $state = '';
+
+            if (!empty($clean['address_city'])) {
+                $city = sanitize_text_field((string) $clean['address_city']);
+            }
+            if (!empty($clean['address_state'])) {
+                $state = sanitize_text_field((string) $clean['address_state']);
+            }
+
+            if (($city === '' || $state === '') && $post_id > 0 && class_exists('MadExtra_Directory_Data')) {
+                $business = MadExtra_Directory_Data::get_business_by_profile((int) $post_id);
+                if ($business) {
+                    if ($city === '' && !empty($business['city'])) {
+                        $city = sanitize_text_field((string) $business['city']);
+                    }
+                    if ($state === '' && !empty($business['state'])) {
+                        $state = sanitize_text_field((string) $business['state']);
+                    }
+                }
+            }
+
+            if ($city === '' && $post_id > 0) {
+                $city = sanitize_text_field((string) get_post_meta($post_id, self::META_PREFIX . 'address_city', true));
+            }
+            if ($state === '' && $post_id > 0) {
+                $state = sanitize_text_field((string) get_post_meta($post_id, self::META_PREFIX . 'address_state', true));
+            }
+
+            return array(
+                'city' => $city,
+                'state' => $state,
+                'city_norm' => self::normalize_location_token($city),
+                'state_norm' => self::normalize_location_token($state),
+                'label' => trim(implode(', ', array_filter(array($city, $state)))),
+            );
+        }
+
+        private static function is_profile_premium($post_id, array $clean = array())
+        {
+            if (array_key_exists('is_premium', $clean)) {
+                return '1' === (string) $clean['is_premium'];
+            }
+            if ($post_id > 0) {
+                return '1' === (string) get_post_meta($post_id, self::META_PREFIX . 'is_premium', true);
+            }
+            return false;
+        }
+
         private static function business_to_directory_card(array $business)
         {
             $profile_id = !empty($business['linked_profile_id']) ? (int) $business['linked_profile_id'] : 0;
             $public_page_id = !empty($business['public_page_id']) ? (int) $business['public_page_id'] : 0;
             if ($profile_id > 0 && !$public_page_id) {
                 $public_page_id = (int) get_post_meta($profile_id, self::META_PREFIX . 'public_profile_page_id', true);
+            }
+            $listing_state = self::directory_listing_state($business, $profile_id);
+            $deep_links = array();
+            if ($profile_id > 0) {
+                $deep_links = array_filter(
+                    array(
+                        'booking' => get_post_meta($profile_id, self::META_PREFIX . 'deep_link_booking_url', true),
+                        'services' => get_post_meta($profile_id, self::META_PREFIX . 'deep_link_services_url', true),
+                        'offers' => get_post_meta($profile_id, self::META_PREFIX . 'deep_link_offers_url', true),
+                        'reviews' => get_post_meta($profile_id, self::META_PREFIX . 'deep_link_reviews_url', true),
+                    )
+                );
+            }
+
+            $is_featured = false;
+            $featured_order = 0;
+            if ($profile_id > 0 && 'premium' === $listing_state) {
+                $is_featured = '1' === (string) get_post_meta($profile_id, self::META_PREFIX . 'is_featured', true);
+                $featured_order = (int) get_post_meta($profile_id, self::META_PREFIX . 'featured_order', true);
+                if ($featured_order < 1 || $featured_order > 3) {
+                    $featured_order = 0;
+                }
+                if (!$is_featured || 0 === $featured_order) {
+                    $is_featured = false;
+                    $featured_order = 0;
+                }
             }
 
             return array(
@@ -3768,7 +4369,26 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'public_page_url' => $public_page_id > 0 ? get_permalink($public_page_id) : '',
                 'claim_status' => isset($business['claim_status']) ? (string) $business['claim_status'] : '',
                 'payment_status' => isset($business['payment_status']) ? (string) $business['payment_status'] : '',
+                'listing_state' => $listing_state,
+                'is_featured' => $is_featured ? '1' : '0',
+                'featured_order' => $featured_order,
+                'deep_links' => $deep_links,
             );
+        }
+
+        private static function directory_listing_state(array $business, $profile_id)
+        {
+            if ($profile_id > 0 && '1' === (string) get_post_meta($profile_id, self::META_PREFIX . 'is_premium', true)) {
+                return 'premium';
+            }
+
+            $claim_status = isset($business['claim_status']) ? strtolower((string) $business['claim_status']) : '';
+            $payment_status = isset($business['payment_status']) ? strtolower((string) $business['payment_status']) : '';
+            if ('claimed' === $claim_status || 'paid' === $payment_status || $profile_id > 0) {
+                return 'claimed';
+            }
+
+            return 'basic';
         }
 
         private static function business_to_profile_payload(array $business)
@@ -3814,6 +4434,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'primary_cta_url' => isset($business['website_url']) ? (string) $business['website_url'] : '',
                 'secondary_cta_label' => __('Claim Profile', 'madextra-citations'),
                 'secondary_cta_url' => '',
+                'deep_link_booking_url' => isset($business['website_url']) ? (string) $business['website_url'] : '',
+                'deep_link_services_url' => isset($business['website_url']) ? (string) $business['website_url'] : '',
+                'deep_link_offers_url' => isset($business['website_url']) ? (string) $business['website_url'] : '',
+                'deep_link_reviews_url' => isset($business['review_url']) ? (string) $business['review_url'] : '',
+                'social_facebook_url' => isset($business['facebook_url']) ? (string) $business['facebook_url'] : '',
+                'social_instagram_url' => isset($business['instagram_url']) ? (string) $business['instagram_url'] : '',
+                'social_linkedin_url' => isset($business['linkedin_url']) ? (string) $business['linkedin_url'] : '',
+                'social_youtube_url' => isset($business['youtube_url']) ? (string) $business['youtube_url'] : '',
+                'social_tiktok_url' => '',
                 'premium_hero_text' => isset($business['business_name']) ? (string) $business['business_name'] : '',
                 'premium_subheadline' => isset($business['vertical_label']) ? (string) $business['vertical_label'] : '',
                 'extended_about_copy' => isset($business['meta_description']) ? (string) $business['meta_description'] : '',
@@ -3845,9 +4474,57 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $service_ids = !empty($business['vertical_label']) ? self::ensure_terms(self::TAX_SERVICE, array($business['vertical_label'])) : array();
 
             if ($linked_profile_id > 0 && self::CPT === get_post_type($linked_profile_id)) {
-                foreach ($payload as $key => $value) {
-                    update_post_meta($linked_profile_id, self::META_PREFIX . $key, $value);
+                $sync_fields = array(
+                    'directory_name',
+                    'listing_url',
+                    'status',
+                    'public_notes',
+                    'nap_business_name',
+                    'nap_address',
+                    'nap_phone',
+                    'business_website_url',
+                    'business_email',
+                    'business_description',
+                    'business_hours',
+                    'address_street',
+                    'address_city',
+                    'address_state',
+                    'address_zip',
+                );
+                foreach ($sync_fields as $key) {
+                    if (!array_key_exists($key, $payload)) {
+                        continue;
+                    }
+                    update_post_meta($linked_profile_id, self::META_PREFIX . $key, $payload[$key]);
                 }
+
+                $manual_override = '1' === (string) get_post_meta($linked_profile_id, self::META_PREFIX . 'premium_manual_override', true);
+                if (!$manual_override) {
+                    foreach (array('is_premium', 'premium_page_mode', 'premium_page_status', 'premium_badge_text') as $key) {
+                        if (!array_key_exists($key, $payload)) {
+                            continue;
+                        }
+                        update_post_meta($linked_profile_id, self::META_PREFIX . $key, $payload[$key]);
+                    }
+                }
+
+                if (!get_post_meta($linked_profile_id, self::META_PREFIX . 'unique_key', true)) {
+                    update_post_meta($linked_profile_id, self::META_PREFIX . 'unique_key', self::build_unique_key($payload, $market_ids, $service_ids));
+                }
+
+                if (!get_post_meta($linked_profile_id, self::META_PREFIX . 'self_serve_enabled', true)) {
+                    update_post_meta($linked_profile_id, self::META_PREFIX . 'self_serve_enabled', '1');
+                }
+                if (!get_post_meta($linked_profile_id, self::META_PREFIX . 'self_serve_cta_label', true)) {
+                    update_post_meta($linked_profile_id, self::META_PREFIX . 'self_serve_cta_label', __('Claim Profile', 'madextra-citations'));
+                }
+                if (!get_post_meta($linked_profile_id, self::META_PREFIX . 'primary_cta_label', true) && !empty($payload['primary_cta_label'])) {
+                    update_post_meta($linked_profile_id, self::META_PREFIX . 'primary_cta_label', $payload['primary_cta_label']);
+                }
+                if (!get_post_meta($linked_profile_id, self::META_PREFIX . 'primary_cta_url', true) && !empty($payload['primary_cta_url'])) {
+                    update_post_meta($linked_profile_id, self::META_PREFIX . 'primary_cta_url', $payload['primary_cta_url']);
+                }
+
                 if ($market_ids) {
                     wp_set_object_terms($linked_profile_id, $market_ids, self::TAX_MARKET, false);
                 }
@@ -4219,6 +4896,24 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     <label><?php esc_html_e('Business Hours', 'madextra-citations'); ?></label>
                     <textarea name="mec[business_hours]" rows="4" placeholder="<?php esc_attr_e('Monday-Friday 9am-5pm', 'madextra-citations'); ?>"></textarea>
 
+                    <label><?php esc_html_e('Booking Link (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[deep_link_booking_url]" placeholder="https://">
+
+                    <label><?php esc_html_e('Services Link (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[deep_link_services_url]" placeholder="https://">
+
+                    <label><?php esc_html_e('Offers Link (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[deep_link_offers_url]" placeholder="https://">
+
+                    <label><?php esc_html_e('Reviews Link (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[deep_link_reviews_url]" placeholder="https://">
+
+                    <label><?php esc_html_e('Facebook URL (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[social_facebook_url]" placeholder="https://facebook.com/your-page">
+
+                    <label><?php esc_html_e('Instagram URL (optional)', 'madextra-citations'); ?></label>
+                    <input type="url" name="mec[social_instagram_url]" placeholder="https://instagram.com/your-handle">
+
                     <label><?php esc_html_e('Logo', 'madextra-citations'); ?></label>
                     <input type="file" name="mec_logo" accept="image/*">
                     <p class="mec-submit-help"><?php esc_html_e('Image files only. Maximum size: 2MB.', 'madextra-citations'); ?></p>
@@ -4441,15 +5136,35 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $cta_label = !empty($profile['self_serve_cta_label']) ? $profile['self_serve_cta_label'] : __('Claim This Profile', 'madextra-citations');
             $primary_name = self::profile_primary_name($profile);
             $is_premium = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'];
+            $is_claimed = $is_premium || ('paid' === (string) get_post_meta($post_id, self::META_PREFIX . 'self_serve_payment_status', true));
             $hero_title = $is_premium && !empty($profile['premium_hero_text']) ? $profile['premium_hero_text'] : $primary_name;
             $hero_subheadline = $is_premium && !empty($profile['premium_subheadline']) ? $profile['premium_subheadline'] : $services;
             $service_areas = self::split_multiline_items(isset($profile['service_areas']) ? $profile['service_areas'] : '');
             $faq_items = self::split_pipe_rows(isset($profile['faq_items']) ? $profile['faq_items'] : '', 2);
             $social_links = self::split_pipe_rows(isset($profile['social_links']) ? $profile['social_links'] : '', 2);
+            foreach (array(
+                array('Facebook', isset($profile['social_facebook_url']) ? $profile['social_facebook_url'] : ''),
+                array('Instagram', isset($profile['social_instagram_url']) ? $profile['social_instagram_url'] : ''),
+                array('LinkedIn', isset($profile['social_linkedin_url']) ? $profile['social_linkedin_url'] : ''),
+                array('YouTube', isset($profile['social_youtube_url']) ? $profile['social_youtube_url'] : ''),
+                array('TikTok', isset($profile['social_tiktok_url']) ? $profile['social_tiktok_url'] : ''),
+            ) as $fixed_social) {
+                if (!empty($fixed_social[1])) {
+                    $social_links[] = $fixed_social;
+                }
+            }
             $service_cards = self::split_pipe_rows(isset($profile['service_cards']) ? $profile['service_cards'] : '', 2);
             $gallery_ids = self::parse_gallery_media_ids(isset($profile['gallery_media_ids']) ? $profile['gallery_media_ids'] : '');
             $primary_cta_label = !empty($profile['primary_cta_label']) ? $profile['primary_cta_label'] : __('Contact This Business', 'madextra-citations');
             $secondary_cta_label = !empty($profile['secondary_cta_label']) ? $profile['secondary_cta_label'] : __('Visit Website', 'madextra-citations');
+            $deep_links = array_filter(
+                array(
+                    __('Book', 'madextra-citations') => isset($profile['deep_link_booking_url']) ? $profile['deep_link_booking_url'] : '',
+                    __('Services', 'madextra-citations') => isset($profile['deep_link_services_url']) ? $profile['deep_link_services_url'] : '',
+                    __('Offers', 'madextra-citations') => isset($profile['deep_link_offers_url']) ? $profile['deep_link_offers_url'] : '',
+                    __('Reviews', 'madextra-citations') => isset($profile['deep_link_reviews_url']) ? $profile['deep_link_reviews_url'] : '',
+                )
+            );
 
             ob_start();
             ?>
@@ -4479,6 +5194,17 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         <?php if ($cta_enabled) : ?><a class="mec-public-button" href="<?php echo esc_url($payment_url); ?>" target="_blank" rel="noopener sponsored"><?php echo esc_html($cta_label); ?></a><?php endif; ?>
                     </div>
                 </section>
+
+                <?php if ($is_claimed && $deep_links) : ?>
+                    <section class="mec-public-card">
+                        <h3><?php esc_html_e('Quick Links', 'madextra-citations'); ?></h3>
+                        <div class="mec-link-row">
+                            <?php foreach ($deep_links as $label => $url) : ?>
+                                <a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php echo esc_html($label); ?></a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                <?php endif; ?>
 
                 <section class="mec-public-grid">
                     <article class="mec-public-card">
@@ -4758,6 +5484,15 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 'primary_cta_url'      => get_post_meta($post_id, self::META_PREFIX . 'primary_cta_url', true),
                 'secondary_cta_label'  => get_post_meta($post_id, self::META_PREFIX . 'secondary_cta_label', true),
                 'secondary_cta_url'    => get_post_meta($post_id, self::META_PREFIX . 'secondary_cta_url', true),
+                'deep_link_booking_url' => get_post_meta($post_id, self::META_PREFIX . 'deep_link_booking_url', true),
+                'deep_link_services_url' => get_post_meta($post_id, self::META_PREFIX . 'deep_link_services_url', true),
+                'deep_link_offers_url' => get_post_meta($post_id, self::META_PREFIX . 'deep_link_offers_url', true),
+                'deep_link_reviews_url' => get_post_meta($post_id, self::META_PREFIX . 'deep_link_reviews_url', true),
+                'social_facebook_url' => get_post_meta($post_id, self::META_PREFIX . 'social_facebook_url', true),
+                'social_instagram_url' => get_post_meta($post_id, self::META_PREFIX . 'social_instagram_url', true),
+                'social_linkedin_url' => get_post_meta($post_id, self::META_PREFIX . 'social_linkedin_url', true),
+                'social_youtube_url' => get_post_meta($post_id, self::META_PREFIX . 'social_youtube_url', true),
+                'social_tiktok_url' => get_post_meta($post_id, self::META_PREFIX . 'social_tiktok_url', true),
                 'premium_hero_text'    => get_post_meta($post_id, self::META_PREFIX . 'premium_hero_text', true),
                 'premium_subheadline'  => get_post_meta($post_id, self::META_PREFIX . 'premium_subheadline', true),
                 'extended_about_copy'  => get_post_meta($post_id, self::META_PREFIX . 'extended_about_copy', true),
@@ -4842,6 +5577,63 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             );
         }
 
+        private static function directory_card_rank(array $card)
+        {
+            $state = isset($card['listing_state']) ? (string) $card['listing_state'] : 'basic';
+            $featured = !empty($card['is_featured']) && '1' === (string) $card['is_featured'];
+            $slot = isset($card['featured_order']) ? (int) $card['featured_order'] : 0;
+
+            if ('premium' === $state && $featured && $slot >= 1 && $slot <= 3) {
+                return 0;
+            }
+            if ('premium' === $state) {
+                return 1;
+            }
+            if ('claimed' === $state) {
+                return 2;
+            }
+            return 3;
+        }
+
+        private static function sort_directory_cards(array &$cards)
+        {
+            usort(
+                $cards,
+                static function ($a, $b) {
+                    $a_rank = self::directory_card_rank($a);
+                    $b_rank = self::directory_card_rank($b);
+                    if ($a_rank !== $b_rank) {
+                        return $a_rank <=> $b_rank;
+                    }
+
+                    if (0 === $a_rank && 0 === $b_rank) {
+                        $a_slot = isset($a['featured_order']) ? (int) $a['featured_order'] : 99;
+                        $b_slot = isset($b['featured_order']) ? (int) $b['featured_order'] : 99;
+                        if ($a_slot !== $b_slot) {
+                            return $a_slot <=> $b_slot;
+                        }
+                    }
+
+                    $a_reviews = isset($a['reviews_count']) ? (int) $a['reviews_count'] : 0;
+                    $b_reviews = isset($b['reviews_count']) ? (int) $b['reviews_count'] : 0;
+                    if ($a_reviews !== $b_reviews) {
+                        return ($a_reviews > $b_reviews) ? -1 : 1;
+                    }
+
+                    $a_rating = isset($a['average_rating']) ? (float) $a['average_rating'] : 0.0;
+                    $b_rating = isset($b['average_rating']) ? (float) $b['average_rating'] : 0.0;
+                    if ($a_rating !== $b_rating) {
+                        return ($a_rating > $b_rating) ? -1 : 1;
+                    }
+
+                    return strcasecmp(
+                        isset($a['business_name']) ? (string) $a['business_name'] : '',
+                        isset($b['business_name']) ? (string) $b['business_name'] : ''
+                    );
+                }
+            );
+        }
+
         private static function directory_group_labels(array $profile, $group_by)
         {
             switch ($group_by) {
@@ -4903,6 +5695,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'per_city'     => 25,
                     'group_by'     => 'none',
                     'show_market_filter' => 'no',
+                    'vertical'     => '',
                 ),
                 $atts,
                 self::SHORTCODE
@@ -4912,7 +5705,10 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 $per_page = '' !== (string) $atts['per_page'] ? (int) $atts['per_page'] : (int) $atts['per_city'];
                 $per_page = min(100, max(1, $per_page));
                 $search = isset($_GET['mec_q']) ? sanitize_text_field(wp_unslash($_GET['mec_q'])) : '';
-                $vertical_slug = isset($_GET['mec_vertical']) ? sanitize_title(wp_unslash($_GET['mec_vertical'])) : '';
+                $vertical_slug = '' !== (string) $atts['vertical']
+                    ? sanitize_title((string) $atts['vertical'])
+                    : (isset($_GET['mec_vertical']) ? sanitize_title(wp_unslash($_GET['mec_vertical'])) : '');
+                $vertical_locked = '' !== (string) $atts['vertical'];
                 $city = isset($_GET['mec_city']) ? sanitize_text_field(wp_unslash($_GET['mec_city'])) : '';
                 $page = max(1, (int) (isset($_GET['mec_page']) ? $_GET['mec_page'] : 1));
                 $verticals = MadExtra_Directory_Data::get_verticals();
@@ -4934,12 +5730,16 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     <?php if ('yes' === $atts['show_filters']) : ?>
                         <form class="mec-directory-filters" method="get">
                             <input type="search" name="mec_q" value="<?php echo esc_attr($search); ?>" placeholder="<?php esc_attr_e('Search business name, website, phone, city, or description', 'madextra-citations'); ?>">
-                            <select name="mec_vertical">
-                                <option value=""><?php esc_html_e('All Verticals', 'madextra-citations'); ?></option>
-                                <?php foreach ($verticals as $vertical) : ?>
-                                    <option value="<?php echo esc_attr($vertical['slug']); ?>" <?php selected($vertical_slug, $vertical['slug']); ?>><?php echo esc_html($vertical['label']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <?php if ($vertical_locked) : ?>
+                                <input type="hidden" name="mec_vertical" value="<?php echo esc_attr($vertical_slug); ?>">
+                            <?php else : ?>
+                                <select name="mec_vertical">
+                                    <option value=""><?php esc_html_e('All Verticals', 'madextra-citations'); ?></option>
+                                    <?php foreach ($verticals as $vertical) : ?>
+                                        <option value="<?php echo esc_attr($vertical['slug']); ?>" <?php selected($vertical_slug, $vertical['slug']); ?>><?php echo esc_html($vertical['label']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php endif; ?>
                             <select name="mec_city">
                                 <option value=""><?php esc_html_e('All Cities', 'madextra-citations'); ?></option>
                                 <?php foreach ($cities as $city_name) : ?>
@@ -4958,6 +5758,49 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     <?php if (!$items) : ?>
                         <div class="mec-directory-empty"><?php esc_html_e('No directory businesses matched the current filters.', 'madextra-citations'); ?></div>
                     <?php else : ?>
+                        <?php
+                        $cards = array_map(array(__CLASS__, 'business_to_directory_card'), $items);
+                        self::sort_directory_cards($cards);
+                        $featured_cards = array_values(
+                            array_filter(
+                                $cards,
+                                static function ($card) {
+                                    return 0 === self::directory_card_rank($card);
+                                }
+                            )
+                        );
+                        $table_cards = $cards;
+                        ?>
+                        <?php if ($featured_cards) : ?>
+                            <section class="mec-premium-featured">
+                                <h3><?php esc_html_e('Featured Premium Listings', 'madextra-citations'); ?></h3>
+                                <div class="mec-featured-grid">
+                                    <?php foreach ($featured_cards as $card) : ?>
+                                        <article class="mec-featured-card">
+                                            <div class="mec-featured-top">
+                                                <?php if (!empty($card['logo_url'])) : ?>
+                                                    <img src="<?php echo esc_url($card['logo_url']); ?>" alt="<?php echo esc_attr($card['business_name']); ?>">
+                                                <?php else : ?>
+                                                    <span class="mec-logo-fallback"><?php echo esc_html(strtoupper(substr($card['business_name'], 0, 1))); ?></span>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <strong><?php echo esc_html($card['business_name']); ?></strong>
+                                                    <span><?php echo esc_html($card['vertical_label']); ?></span>
+                                                </div>
+                                            </div>
+                                            <?php if (!empty($card['display_address'])) : ?><p><?php echo esc_html($card['display_address']); ?></p><?php endif; ?>
+                                            <div class="mec-link-row">
+                                                <?php if (!empty($card['public_page_url'])) : ?><a href="<?php echo esc_url($card['public_page_url']); ?>"><?php esc_html_e('View Profile', 'madextra-citations'); ?></a><?php endif; ?>
+                                                <?php if (!empty($card['website_url'])) : ?><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
+                                                <?php if (!empty($card['deep_links']['booking'])) : ?><a href="<?php echo esc_url($card['deep_links']['booking']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Book', 'madextra-citations'); ?></a><?php endif; ?>
+                                            </div>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($table_cards) : ?>
                         <div class="mec-table-wrap">
                             <table class="mec-table">
                                 <thead>
@@ -4965,15 +5808,37 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                     <th><?php esc_html_e('Business', 'madextra-citations'); ?></th>
                                     <th><?php esc_html_e('Vertical', 'madextra-citations'); ?></th>
                                     <th><?php esc_html_e('Location', 'madextra-citations'); ?></th>
+                                    <th><?php esc_html_e('Listing Type', 'madextra-citations'); ?></th>
                                     <th><?php esc_html_e('Rating', 'madextra-citations'); ?></th>
                                     <th><?php esc_html_e('Contact', 'madextra-citations'); ?></th>
                                     <th><?php esc_html_e('Actions', 'madextra-citations'); ?></th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <?php foreach ($items as $business) : ?>
-                                    <?php $card = self::business_to_directory_card($business); ?>
-                                    <?php $claim_url = self::build_business_payment_url($business); ?>
+                                <?php foreach ($table_cards as $card) : ?>
+                                    <?php
+                                    $claim_url = '';
+                                    $join_url = home_url('/join-directory/');
+                                    if (!empty($card['id']) && class_exists('MadExtra_Directory_Data')) {
+                                        $business_row = MadExtra_Directory_Data::get_business((int) $card['id']);
+                                        $claim_url = $business_row ? self::build_business_payment_url($business_row) : '';
+                                        if ($business_row) {
+                                            $join_args = array_filter(
+                                                array(
+                                                    'prefill_business' => isset($business_row['business_name']) ? (string) $business_row['business_name'] : '',
+                                                    'prefill_website' => isset($business_row['website_url']) ? (string) $business_row['website_url'] : '',
+                                                    'prefill_phone' => !empty($business_row['phone_standard']) ? (string) $business_row['phone_standard'] : (isset($business_row['phone_raw']) ? (string) $business_row['phone_raw'] : ''),
+                                                    'prefill_city' => isset($business_row['city']) ? (string) $business_row['city'] : '',
+                                                    'prefill_state' => isset($business_row['state']) ? (string) $business_row['state'] : '',
+                                                    'prefill_vertical' => isset($business_row['vertical_slug']) ? (string) $business_row['vertical_slug'] : '',
+                                                )
+                                            );
+                                            if ($join_args) {
+                                                $join_url = add_query_arg($join_args, $join_url);
+                                            }
+                                        }
+                                    }
+                                    ?>
                                     <tr>
                                         <td>
                                             <div class="mec-business-cell">
@@ -4990,6 +5855,26 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                         </td>
                                         <td><?php echo esc_html($card['vertical_label']); ?></td>
                                         <td><?php echo esc_html($card['display_address']); ?></td>
+                                        <td>
+                                            <?php
+                                            if ('premium' === $card['listing_state']) {
+                                                if (!empty($card['is_featured']) && '1' === (string) $card['is_featured'] && (int) $card['featured_order'] > 0) {
+                                                    echo esc_html(
+                                                        sprintf(
+                                                            __('Featured Premium (%d)', 'madextra-citations'),
+                                                            (int) $card['featured_order']
+                                                        )
+                                                    );
+                                                } else {
+                                                    echo esc_html__('Premium', 'madextra-citations');
+                                                }
+                                            } elseif ('claimed' === $card['listing_state']) {
+                                                echo esc_html__('Claimed', 'madextra-citations');
+                                            } else {
+                                                echo esc_html__('Basic', 'madextra-citations');
+                                            }
+                                            ?>
+                                        </td>
                                         <td>
                                             <?php
                                             $rating_bits = array();
@@ -5012,8 +5897,14 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                                 <?php if (!empty($card['public_page_url'])) : ?>
                                                     <a href="<?php echo esc_url($card['public_page_url']); ?>"><?php esc_html_e('View Profile', 'madextra-citations'); ?></a>
                                                 <?php endif; ?>
-                                                <?php if (!empty($claim_url)) : ?>
+                                                <?php if ('basic' === $card['listing_state'] && !empty($claim_url)) : ?>
                                                     <a href="<?php echo esc_url($claim_url); ?>" target="_blank" rel="noopener sponsored"><?php esc_html_e('Claim Profile', 'madextra-citations'); ?></a>
+                                                <?php elseif ('basic' === $card['listing_state']) : ?>
+                                                    <a href="<?php echo esc_url($join_url); ?>"><?php esc_html_e('Get Premium', 'madextra-citations'); ?></a>
+                                                <?php elseif ('claimed' === $card['listing_state']) : ?>
+                                                    <span><?php esc_html_e('Claimed', 'madextra-citations'); ?></span>
+                                                <?php elseif ('premium' === $card['listing_state']) : ?>
+                                                    <span><?php esc_html_e('Premium', 'madextra-citations'); ?></span>
                                                 <?php endif; ?>
                                             </div>
                                         </td>
@@ -5022,6 +5913,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                 </tbody>
                             </table>
                         </div>
+                        <?php endif; ?>
 
                         <?php if ((int) $result['total_pages'] > 1) : ?>
                             <nav class="mec-directory-pagination">
@@ -5041,6 +5933,20 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     .mec-directory-filters { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
                     .mec-directory-filters input, .mec-directory-filters select, .mec-directory-filters button { width:100%; padding:10px; border:1px solid #cfd7ea; border-radius:10px; font:inherit; }
                     .mec-directory-filters button { background:#1847d4; color:#fff; font-weight:700; cursor:pointer; }
+                    .mec-premium-featured { border:1px solid #d8e3fa; border-radius:14px; padding:14px; background:linear-gradient(135deg,#f7fbff,#edf3ff); }
+                    .mec-premium-featured h3 { margin:0 0 10px; }
+                    .mec-featured-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
+                    .mec-featured-card { border:1px solid #cbd8ef; border-radius:10px; padding:12px; background:#fff; display:grid; gap:8px; }
+                    .mec-featured-top, .mec-business-cell { display:flex; gap:10px; align-items:flex-start; }
+                    .mec-featured-top img, .mec-business-cell img, .mec-logo-fallback { width:44px; height:44px; border-radius:8px; object-fit:cover; flex:0 0 auto; }
+                    .mec-logo-fallback { display:grid; place-items:center; background:#e8eefb; color:#27426f; font-weight:700; }
+                    .mec-featured-top strong, .mec-business-cell strong { display:block; color:#17253f; }
+                    .mec-featured-top span, .mec-business-cell span { display:block; color:#5d6f8d; font-size:.88rem; }
+                    .mec-link-row { display:flex; gap:8px; flex-wrap:wrap; }
+                    .mec-table-wrap { overflow-x:auto; }
+                    .mec-table { width:100%; border-collapse:collapse; min-width:960px; }
+                    .mec-table th, .mec-table td { padding:10px 12px; border-bottom:1px solid #edf1fb; text-align:left; vertical-align:top; }
+                    .mec-table th { background:#fafcff; font-size:.82rem; letter-spacing:.03em; text-transform:uppercase; color:#33486b; }
                     .mec-directory-empty { background:#fff; border:1px solid #dbe2f3; border-radius:12px; padding:20px; }
                     .mec-directory-pagination { display:flex; gap:12px; align-items:center; justify-content:space-between; }
                 </style>
@@ -5062,7 +5968,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             );
 
             if (!$query->have_posts()) {
-                return '<p>' . esc_html__('No citation profiles found.', 'madextra-citations') . '</p>';
+                return '<p>' . esc_html__('No directory profiles found.', 'madextra-citations') . '</p>';
             }
 
             $profiles = array();

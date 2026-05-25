@@ -8,7 +8,7 @@ if (!class_exists('MadExtra_Directory_Data')) {
     final class MadExtra_Directory_Data
     {
         const SCHEMA_OPTION = 'mec_directory_schema_version';
-        const SCHEMA_VERSION = '1.0.0';
+        const SCHEMA_VERSION = '1.1.0';
         const CRON_HOOK = 'mec_process_directory_import_job';
         const UPLOAD_SUBDIR = 'mec-directory-imports';
         const BATCH_SIZE = 200;
@@ -125,6 +125,10 @@ if (!class_exists('MadExtra_Directory_Data')) {
                     youtube_url text NULL,
                     meta_description longtext NULL,
                     kgmid varchar(191) NULL,
+                    identity_name varchar(191) NOT NULL DEFAULT '',
+                    identity_phone varchar(80) NOT NULL DEFAULT '',
+                    identity_address varchar(191) NOT NULL DEFAULT '',
+                    identity_website varchar(191) NOT NULL DEFAULT '',
                     is_active tinyint(1) unsigned NOT NULL DEFAULT 1,
                     last_seen_job_id bigint(20) unsigned NOT NULL DEFAULT 0,
                     linked_profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
@@ -141,6 +145,10 @@ if (!class_exists('MadExtra_Directory_Data')) {
                     UNIQUE KEY vertical_source (vertical_slug, external_source_id),
                     KEY vertical_active (vertical_slug, is_active),
                     KEY city (city(100)),
+                    KEY vertical_identity_name (vertical_slug, identity_name),
+                    KEY vertical_identity_phone (vertical_slug, identity_phone),
+                    KEY vertical_identity_address (vertical_slug, identity_address),
+                    KEY vertical_identity_website (vertical_slug, identity_website),
                     KEY linked_profile_id (linked_profile_id),
                     KEY public_page_id (public_page_id),
                     KEY checkout_session_id (checkout_session_id)
@@ -222,6 +230,31 @@ if (!class_exists('MadExtra_Directory_Data')) {
                     'slug' => 'medical-spas',
                     'label' => 'Medical Spas',
                     'description' => 'Medical spas and aesthetic clinics.',
+                ),
+                array(
+                    'slug' => 'roofing-contractors',
+                    'label' => 'Roofing Contractors',
+                    'description' => 'Roofing and exterior repair services.',
+                ),
+                array(
+                    'slug' => 'mechanics',
+                    'label' => 'Mechanics',
+                    'description' => 'Auto repair and maintenance businesses.',
+                ),
+                array(
+                    'slug' => 'electricians',
+                    'label' => 'Electricians',
+                    'description' => 'Residential and commercial electrical services.',
+                ),
+                array(
+                    'slug' => 'plumbers',
+                    'label' => 'Plumbers',
+                    'description' => 'Plumbing installation and repair services.',
+                ),
+                array(
+                    'slug' => 'attorneys',
+                    'label' => 'Attorneys',
+                    'description' => 'Law firms and legal services.',
                 ),
             );
         }
@@ -519,6 +552,20 @@ if (!class_exists('MadExtra_Directory_Data')) {
             return is_array($row) ? $row : array();
         }
 
+        public static function get_business_by_profile($profile_id)
+        {
+            global $wpdb;
+            $table = self::table('mec_directory_businesses');
+            $row = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT * FROM {$table} WHERE linked_profile_id = %d ORDER BY id DESC LIMIT 1",
+                    (int) $profile_id
+                ),
+                ARRAY_A
+            );
+            return is_array($row) ? $row : array();
+        }
+
         public static function find_business_by_session($session_id)
         {
             global $wpdb;
@@ -542,31 +589,78 @@ if (!class_exists('MadExtra_Directory_Data')) {
             $params = array();
 
             if (empty($args['include_inactive'])) {
-                $where[] = 'is_active = 1';
+                $where[] = 'b.is_active = 1';
             }
             if (!empty($args['vertical_slug'])) {
-                $where[] = 'vertical_slug = %s';
+                $where[] = 'b.vertical_slug = %s';
                 $params[] = self::normalize_vertical_slug($args['vertical_slug']);
             }
             if (!empty($args['city'])) {
-                $where[] = 'city = %s';
+                $where[] = 'b.city = %s';
                 $params[] = sanitize_text_field((string) $args['city']);
+            }
+            if (!empty($args['state'])) {
+                $where[] = 'b.state = %s';
+                $params[] = sanitize_text_field((string) $args['state']);
             }
             if (!empty($args['search'])) {
                 $search = '%' . $wpdb->esc_like(sanitize_text_field((string) $args['search'])) . '%';
-                $where[] = '(business_name LIKE %s OR city LIKE %s OR full_address LIKE %s OR phone_standard LIKE %s OR website_url LIKE %s OR meta_description LIKE %s)';
-                $params = array_merge($params, array($search, $search, $search, $search, $search, $search));
+                $where[] = '(b.business_name LIKE %s OR b.city LIKE %s OR b.state LIKE %s OR b.full_address LIKE %s OR b.phone_standard LIKE %s OR b.website_url LIKE %s OR b.email LIKE %s OR b.hours LIKE %s OR b.meta_description LIKE %s)';
+                $params = array_merge($params, array($search, $search, $search, $search, $search, $search, $search, $search, $search));
             }
 
             $where_sql = implode(' AND ', $where);
-            $count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+            $count_sql = "SELECT COUNT(*) FROM {$table} b WHERE {$where_sql}";
             if ($params) {
                 $count_sql = $wpdb->prepare($count_sql, $params);
             }
             $total = (int) $wpdb->get_var($count_sql);
 
-            $select_sql = "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY reviews_count DESC, average_rating DESC, business_name ASC LIMIT %d OFFSET %d";
-            $select_params = array_merge($params, array($limit, $offset));
+            $meta_premium_key = 'mec_is_premium';
+            $meta_featured_key = 'mec_is_featured';
+            $meta_featured_order_key = 'mec_featured_order';
+
+            $select_sql = "SELECT b.*, pm_premium.meta_value AS mec_is_premium, pm_featured.meta_value AS mec_is_featured, pm_featured_order.meta_value AS mec_featured_order
+                FROM {$table} b
+                LEFT JOIN (
+                    SELECT post_id, MAX(meta_value) AS meta_value
+                    FROM {$wpdb->postmeta}
+                    WHERE meta_key = %s
+                    GROUP BY post_id
+                ) pm_premium ON (b.linked_profile_id > 0 AND pm_premium.post_id = b.linked_profile_id)
+                LEFT JOIN (
+                    SELECT post_id, MAX(meta_value) AS meta_value
+                    FROM {$wpdb->postmeta}
+                    WHERE meta_key = %s
+                    GROUP BY post_id
+                ) pm_featured ON (b.linked_profile_id > 0 AND pm_featured.post_id = b.linked_profile_id)
+                LEFT JOIN (
+                    SELECT post_id, MAX(meta_value) AS meta_value
+                    FROM {$wpdb->postmeta}
+                    WHERE meta_key = %s
+                    GROUP BY post_id
+                ) pm_featured_order ON (b.linked_profile_id > 0 AND pm_featured_order.post_id = b.linked_profile_id)
+                WHERE {$where_sql}
+                ORDER BY
+                    CASE
+                        WHEN pm_premium.meta_value = '1' AND pm_featured.meta_value = '1' THEN 0
+                        WHEN pm_premium.meta_value = '1' THEN 1
+                        WHEN b.claim_status = 'claimed' OR b.payment_status = 'paid' OR b.linked_profile_id > 0 THEN 2
+                        ELSE 3
+                    END ASC,
+                    CASE
+                        WHEN pm_premium.meta_value = '1' AND pm_featured.meta_value = '1' THEN CAST(pm_featured_order.meta_value AS UNSIGNED)
+                        ELSE 999
+                    END ASC,
+                    b.reviews_count DESC,
+                    b.average_rating DESC,
+                    b.business_name ASC
+                LIMIT %d OFFSET %d";
+            $select_params = array_merge(
+                array($meta_premium_key, $meta_featured_key, $meta_featured_order_key),
+                $params,
+                array($limit, $offset)
+            );
             $items = $wpdb->get_results($wpdb->prepare($select_sql, $select_params), ARRAY_A);
 
             return array(
@@ -646,6 +740,17 @@ if (!class_exists('MadExtra_Directory_Data')) {
             );
 
             $now = current_time('mysql');
+            $identity = self::build_identity_signals(
+                $business_name,
+                isset($payload['full_address']) ? (string) $payload['full_address'] : '',
+                isset($payload['street_address']) ? (string) $payload['street_address'] : '',
+                isset($payload['city']) ? (string) $payload['city'] : '',
+                isset($payload['state']) ? (string) $payload['state'] : '',
+                isset($payload['zip']) ? (string) $payload['zip'] : '',
+                $phone_standard,
+                $website_url
+            );
+            $identity_match_id = $existing_id > 0 ? 0 : self::find_identity_duplicate_id($vertical_slug, $identity);
             $data = array(
                 'vertical_slug' => $vertical_slug,
                 'vertical_label' => $vertical['label'],
@@ -669,6 +774,10 @@ if (!class_exists('MadExtra_Directory_Data')) {
                 'hours' => isset($payload['hours']) ? sanitize_textarea_field((string) $payload['hours']) : '',
                 'image_url' => isset($payload['image_url']) ? esc_url_raw((string) $payload['image_url']) : '',
                 'meta_description' => isset($payload['meta_description']) ? sanitize_textarea_field((string) $payload['meta_description']) : '',
+                'identity_name' => $identity['name'],
+                'identity_phone' => $identity['phone'],
+                'identity_address' => $identity['address'],
+                'identity_website' => $identity['website'],
                 'business_status' => isset($payload['business_status']) ? sanitize_text_field((string) $payload['business_status']) : 'pending',
                 'is_active' => !empty($payload['is_active']) ? 1 : 0,
                 'claim_status' => isset($payload['claim_status']) ? sanitize_key((string) $payload['claim_status']) : 'submitted',
@@ -676,16 +785,19 @@ if (!class_exists('MadExtra_Directory_Data')) {
                 'updated_at' => $now,
             );
 
-            $format = array('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%d','%s','%s','%s');
-
             if ($existing_id > 0) {
-                $wpdb->update($table, $data, array('id' => $existing_id), $format, array('%d'));
+                $wpdb->update($table, $data, array('id' => $existing_id));
                 return self::get_business($existing_id);
+            }
+            if ($identity_match_id > 0) {
+                $update_data = $data;
+                unset($update_data['external_source_id'], $update_data['source_id_type']);
+                $wpdb->update($table, $update_data, array('id' => $identity_match_id));
+                return self::get_business($identity_match_id);
             }
 
             $data['created_at'] = $now;
-            $format[] = '%s';
-            $inserted = $wpdb->insert($table, $data, $format);
+            $inserted = $wpdb->insert($table, $data);
             if (!$inserted) {
                 return new WP_Error('manual_business_insert_failed', __('Could not create the directory business record.', 'madextra-citations'));
             }
@@ -828,7 +940,7 @@ if (!class_exists('MadExtra_Directory_Data')) {
         {
             $source_id = self::pick(
                 $row,
-                array('source_business_id', 'cid', 'place_id', 'kgmid', 'google_knowledge_url', 'google_knowledge_url__2', 'gmb_url', 'domain')
+                array('source_business_id', 'cid', 'place_id', 'kgmid', 'google_knowledge_url', 'google_knowledge_url__2', 'gmb_url')
             );
             if ('' === $source_id) {
                 return new WP_Error('missing_source_id', __('Row is missing a stable source business ID.', 'madextra-citations'));
@@ -889,12 +1001,141 @@ if (!class_exists('MadExtra_Directory_Data')) {
 
         private static function source_id_type(array $row, $source_id)
         {
-            foreach (array('source_business_id', 'cid', 'place_id', 'kgmid', 'google_knowledge_url', 'google_knowledge_url__2', 'gmb_url', 'domain') as $key) {
+            foreach (array('source_business_id', 'cid', 'place_id', 'kgmid', 'google_knowledge_url', 'google_knowledge_url__2', 'gmb_url') as $key) {
                 if (!empty($row[$key]) && trim((string) $row[$key]) === $source_id) {
                     return $key;
                 }
             }
             return 'derived';
+        }
+
+        private static function normalize_identity_token($value)
+        {
+            $value = strtolower(trim((string) $value));
+            $value = preg_replace('/[^a-z0-9]+/', '', $value);
+            return (string) $value;
+        }
+
+        private static function normalize_identity_phone($value)
+        {
+            return (string) preg_replace('/\D+/', '', (string) $value);
+        }
+
+        private static function normalize_identity_website($value)
+        {
+            $value = trim((string) $value);
+            if ('' === $value) {
+                return '';
+            }
+
+            $host = (string) wp_parse_url($value, PHP_URL_HOST);
+            if ('' === $host) {
+                $host = $value;
+            }
+            $host = strtolower(trim($host));
+            $host = preg_replace('/^www\./', '', $host);
+            return (string) preg_replace('/[^a-z0-9\.\-]+/', '', $host);
+        }
+
+        private static function build_identity_signals($business_name, $full_address, $street, $city, $state, $zip, $phone, $website)
+        {
+            $address = trim((string) $full_address);
+            if ('' === $address) {
+                $address = implode(' ', array_filter(array((string) $street, (string) $city, (string) $state, (string) $zip)));
+            }
+
+            return array(
+                'name' => self::normalize_identity_token($business_name),
+                'phone' => self::normalize_identity_phone($phone),
+                'address' => self::normalize_identity_token($address),
+                'website' => self::normalize_identity_website($website),
+            );
+        }
+
+        private static function count_matching_identity_signals(array $target, array $candidate)
+        {
+            $matches = 0;
+            foreach (array('name', 'phone', 'address', 'website') as $key) {
+                if (empty($target[$key]) || empty($candidate[$key])) {
+                    continue;
+                }
+                if ((string) $target[$key] === (string) $candidate[$key]) {
+                    $matches++;
+                }
+            }
+            return $matches;
+        }
+
+        private static function count_nonempty_identity_signals(array $signals)
+        {
+            $count = 0;
+            foreach (array('name', 'phone', 'address', 'website') as $key) {
+                if (!empty($signals[$key])) {
+                    $count++;
+                }
+            }
+            return $count;
+        }
+
+        private static function find_identity_duplicate_id($vertical_slug, array $signals, $exclude_id = 0)
+        {
+            if (self::count_nonempty_identity_signals($signals) < 2) {
+                return 0;
+            }
+
+            global $wpdb;
+            $table = self::table('mec_directory_businesses');
+            $conditions = array();
+            $params = array(self::normalize_vertical_slug($vertical_slug));
+
+            if (!empty($signals['name'])) {
+                $conditions[] = 'identity_name = %s';
+                $params[] = $signals['name'];
+            }
+            if (!empty($signals['phone'])) {
+                $conditions[] = 'identity_phone = %s';
+                $params[] = $signals['phone'];
+            }
+            if (!empty($signals['address'])) {
+                $conditions[] = 'identity_address = %s';
+                $params[] = $signals['address'];
+            }
+            if (!empty($signals['website'])) {
+                $conditions[] = 'identity_website = %s';
+                $params[] = $signals['website'];
+            }
+            if (!$conditions) {
+                return 0;
+            }
+
+            $sql = "SELECT id, identity_name, identity_phone, identity_address, identity_website
+                    FROM {$table}
+                    WHERE vertical_slug = %s
+                      AND (" . implode(' OR ', $conditions) . ')';
+            if ($exclude_id > 0) {
+                $sql .= ' AND id <> %d';
+                $params[] = (int) $exclude_id;
+            }
+            $sql .= ' LIMIT 30';
+
+            $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+            if (!$rows) {
+                return 0;
+            }
+
+            foreach ($rows as $row) {
+                $candidate = array(
+                    'name' => isset($row['identity_name']) ? (string) $row['identity_name'] : '',
+                    'phone' => isset($row['identity_phone']) ? (string) $row['identity_phone'] : '',
+                    'address' => isset($row['identity_address']) ? (string) $row['identity_address'] : '',
+                    'website' => isset($row['identity_website']) ? (string) $row['identity_website'] : '',
+                );
+                if (self::count_matching_identity_signals($signals, $candidate) >= 2) {
+                    return (int) $row['id'];
+                }
+            }
+
+            return 0;
         }
 
         private static function upsert_business(array $mapped, $job_id)
@@ -908,11 +1149,26 @@ if (!class_exists('MadExtra_Directory_Data')) {
                     $mapped['external_source_id']
                 )
             );
+            $identity = self::build_identity_signals(
+                isset($mapped['business_name']) ? (string) $mapped['business_name'] : '',
+                isset($mapped['full_address']) ? (string) $mapped['full_address'] : '',
+                isset($mapped['street_address']) ? (string) $mapped['street_address'] : '',
+                isset($mapped['city']) ? (string) $mapped['city'] : '',
+                isset($mapped['state']) ? (string) $mapped['state'] : '',
+                isset($mapped['zip']) ? (string) $mapped['zip'] : '',
+                !empty($mapped['phone_standard']) ? (string) $mapped['phone_standard'] : (isset($mapped['phone_raw']) ? (string) $mapped['phone_raw'] : ''),
+                isset($mapped['website_url']) ? (string) $mapped['website_url'] : ''
+            );
+            $identity_match_id = $existing_id > 0 ? 0 : self::find_identity_duplicate_id($mapped['vertical_slug'], $identity);
 
             $now = current_time('mysql');
             $data = array_merge(
                 $mapped,
                 array(
+                    'identity_name' => $identity['name'],
+                    'identity_phone' => $identity['phone'],
+                    'identity_address' => $identity['address'],
+                    'identity_website' => $identity['website'],
                     'is_active' => 1,
                     'last_seen_job_id' => (int) $job_id,
                     'updated_at' => $now,
@@ -922,6 +1178,12 @@ if (!class_exists('MadExtra_Directory_Data')) {
             if ($existing_id > 0) {
                 $wpdb->update($table, $data, array('id' => $existing_id));
                 return array('business_id' => $existing_id, 'inserted' => false);
+            }
+            if ($identity_match_id > 0) {
+                $update_data = $data;
+                unset($update_data['external_source_id'], $update_data['source_id_type']);
+                $wpdb->update($table, $update_data, array('id' => $identity_match_id));
+                return array('business_id' => $identity_match_id, 'inserted' => false, 'duplicate_matched' => true);
             }
 
             $data['created_at'] = $now;
