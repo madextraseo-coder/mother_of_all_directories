@@ -1221,18 +1221,26 @@ if (!class_exists('MadExtra_Directory_Data')) {
             }
 
             $businesses = self::table('mec_directory_businesses');
-            $deactivated = $wpdb->query(
-                $wpdb->prepare(
-                    "UPDATE {$businesses}
-                        SET is_active = 0, updated_at = %s
-                      WHERE vertical_slug = %s
-                        AND last_seen_job_id <> %d
-                        AND is_active = 1",
-                    current_time('mysql'),
-                    $job['vertical_slug'],
-                    (int) $job_id
-                )
-            );
+            $inserted_count = isset($job['inserted_count']) ? (int) $job['inserted_count'] : 0;
+            $updated_count = isset($job['updated_count']) ? (int) $job['updated_count'] : 0;
+            $successful_upserts = $inserted_count + $updated_count;
+            $deactivated = 0;
+
+            // Safety: do not deactivate prior snapshot rows if this upload produced zero successful upserts.
+            if ($successful_upserts > 0) {
+                $deactivated = $wpdb->query(
+                    $wpdb->prepare(
+                        "UPDATE {$businesses}
+                            SET is_active = 0, updated_at = %s
+                          WHERE vertical_slug = %s
+                            AND last_seen_job_id <> %d
+                            AND is_active = 1",
+                        current_time('mysql'),
+                        $job['vertical_slug'],
+                        (int) $job_id
+                    )
+                );
+            }
 
             $wpdb->update(
                 self::table('mec_directory_import_jobs'),
@@ -1246,6 +1254,10 @@ if (!class_exists('MadExtra_Directory_Data')) {
                 array('%s', '%d', '%s', '%s'),
                 array('%d')
             );
+
+            if ($successful_upserts > 0 && class_exists('MadExtra_Citations_Plugin') && method_exists('MadExtra_Citations_Plugin', 'schedule_business_page_generation_for_vertical')) {
+                MadExtra_Citations_Plugin::schedule_business_page_generation_for_vertical((string) $job['vertical_slug']);
+            }
         }
 
         private static function mark_job_failed($job_id, $message)
