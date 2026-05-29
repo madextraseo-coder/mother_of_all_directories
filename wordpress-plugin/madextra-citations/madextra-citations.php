@@ -3,7 +3,7 @@
  * Plugin Name: MadExtra Directory
  * Plugin URI: https://directory.madextraseo.com
  * Description: Directory profile management with granular permissions, scalable imports, Stripe claims, and searchable public directory pages.
- * Version: 0.7.3
+ * Version: 0.7.4
  * Author: Mad Extra SEO
  * Author URI: https://madextraseo.com
  * License: GPL-2.0-or-later
@@ -89,6 +89,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             add_action('admin_post_mec_import_csv', array(__CLASS__, 'handle_import_request'));
             add_action('admin_post_mec_retry_directory_import', array(__CLASS__, 'handle_retry_directory_import'));
             add_action('admin_post_mec_download_directory_import_errors', array(__CLASS__, 'handle_download_directory_import_errors'));
+            add_action('admin_post_mec_queue_business_pages', array(__CLASS__, 'handle_queue_business_pages'));
+            add_action('admin_post_mec_restore_active_snapshot', array(__CLASS__, 'handle_restore_active_snapshot'));
             add_action('admin_post_mec_premium_profile_action', array(__CLASS__, 'handle_premium_profile_action'));
             add_action('admin_post_mec_bulk_premium_profile_action', array(__CLASS__, 'handle_bulk_premium_profile_action'));
             add_action('admin_post_mec_autofill_featured_slots', array(__CLASS__, 'handle_autofill_featured_slots'));
@@ -1481,6 +1483,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $is_premium = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'];
             $is_paid_claim = 'paid' === (string) get_post_meta($post_id, self::META_PREFIX . 'self_serve_payment_status', true);
             $use_premium_framework = $is_premium || $is_paid_claim;
+            $listing_state = $is_premium ? 'premium' : 'claimed';
+            $outbound_rel = self::outbound_link_rel_for_listing($listing_state);
 
             $headline = $use_premium_framework && !empty($profile['premium_hero_text']) ? (string) $profile['premium_hero_text'] : $primary_name;
             $subheadline = $use_premium_framework && !empty($profile['premium_subheadline'])
@@ -1614,7 +1618,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     if ('' === $url) {
                         continue;
                     }
-                    $link_rows[] = '<li><strong>' . esc_html($label) . ':</strong> <a href="' . esc_url($url) . '" target="_blank" rel="noopener">' . esc_html($url) . '</a></li>';
+                    $link_rows[] = '<li><strong>' . esc_html($label) . ':</strong> <a href="' . esc_url($url) . '" target="_blank" rel="' . esc_attr($outbound_rel) . '">' . esc_html($url) . '</a></li>';
                 }
                 if ($link_rows) {
                     $links_markup = '<ul>' . implode('', $link_rows) . '</ul>';
@@ -1685,7 +1689,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     ($display_address ? '<p><strong>' . esc_html__('Address:', 'madextra-citations') . '</strong> ' . nl2br(esc_html($display_address)) . '</p>' : ''),
                     ($phone ? '<p><strong>' . esc_html__('Phone:', 'madextra-citations') . '</strong> ' . esc_html($phone) . '</p>' : ''),
                     ($email ? '<p><strong>' . esc_html__('Email:', 'madextra-citations') . '</strong> ' . esc_html($email) . '</p>' : ''),
-                    ($website ? '<p><strong>' . esc_html__('Website:', 'madextra-citations') . '</strong> <a href="' . esc_url($website) . '" target="_blank" rel="noopener">' . esc_html($website) . '</a></p>' : ''),
+                    ($website ? '<p><strong>' . esc_html__('Website:', 'madextra-citations') . '</strong> <a href="' . esc_url($website) . '" target="_blank" rel="' . esc_attr($outbound_rel) . '">' . esc_html($website) . '</a></p>' : ''),
                     '</section>',
                     '<section class="mec-premium-shell">',
                     '<h2>' . esc_html__('Live Profile Data Block', 'madextra-citations') . '</h2>',
@@ -1723,8 +1727,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     '<section class="mec-premium-shell mec-premium-cta">',
                     '<h2>' . esc_html__('Primary Call To Action', 'madextra-citations') . '</h2>',
                     '<p>' . esc_html__('Use this section for booking, consultation requests, or lead forms.', 'madextra-citations') . '</p>',
-                    ($primary_cta_url ? '<p><a href="' . esc_url($primary_cta_url) . '" target="_blank" rel="noopener">' . esc_html($primary_cta_label) . '</a></p>' : ''),
-                    ($secondary_cta_url ? '<p><a href="' . esc_url($secondary_cta_url) . '" target="_blank" rel="noopener">' . esc_html($secondary_cta_label) . '</a></p>' : ''),
+                    ($primary_cta_url ? '<p><a href="' . esc_url($primary_cta_url) . '" target="_blank" rel="' . esc_attr($outbound_rel) . '">' . esc_html($primary_cta_label) . '</a></p>' : ''),
+                    ($secondary_cta_url ? '<p><a href="' . esc_url($secondary_cta_url) . '" target="_blank" rel="' . esc_attr($outbound_rel) . '">' . esc_html($secondary_cta_label) . '</a></p>' : ''),
                     '</section>',
                     '<section class="mec-premium-shell">',
                     '<h2>' . esc_html__('Elementor Notes', 'madextra-citations') . '</h2>',
@@ -3100,12 +3104,13 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         <div class="mec-home-grid">
                             <?php foreach ($featured_businesses as $business) : ?>
                                 <?php $card = self::business_to_directory_card($business); ?>
+                                <?php $card_outbound_rel = self::outbound_link_rel_for_listing(isset($card['listing_state']) ? $card['listing_state'] : 'basic'); ?>
                                 <article class="mec-home-card">
                                     <h3><?php echo esc_html($card['business_name']); ?></h3>
                                     <p><?php echo esc_html($card['vertical_label']); ?></p>
                                     <?php if (!empty($card['display_address'])) : ?><p><?php echo esc_html($card['display_address']); ?></p><?php endif; ?>
                                     <div class="mec-home-inline-links">
-                                        <?php if (!empty($card['website_url'])) : ?><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
+                                        <?php if (!empty($card['website_url'])) : ?><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="<?php echo esc_attr($card_outbound_rel); ?>"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
                                         <?php if (!empty($card['public_page_url'])) : ?><a href="<?php echo esc_url($card['public_page_url']); ?>"><?php esc_html_e('Profile', 'madextra-citations'); ?></a><?php endif; ?>
                                     </div>
                                 </article>
@@ -3164,10 +3169,99 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                     'status' => $selected_status,
                 )
             ) : array();
+            $snapshot_rows = array();
+            $summary_verticals = $verticals;
+            if ($selected_vertical) {
+                $summary_verticals = array_values(
+                    array_filter(
+                        $verticals,
+                        static function ($vertical) use ($selected_vertical) {
+                            return isset($vertical['slug']) && $selected_vertical === sanitize_title((string) $vertical['slug']);
+                        }
+                    )
+                );
+                if (!$summary_verticals) {
+                    $summary_verticals = array(
+                        array(
+                            'slug' => $selected_vertical,
+                            'label' => ucwords(str_replace('-', ' ', $selected_vertical)),
+                        ),
+                    );
+                }
+            }
+            if (class_exists('MadExtra_Directory_Data')) {
+                foreach ($summary_verticals as $vertical_row) {
+                    $slug = isset($vertical_row['slug']) ? sanitize_title((string) $vertical_row['slug']) : '';
+                    if ('' === $slug) {
+                        continue;
+                    }
+                    $snapshot_rows[] = array(
+                        'slug' => $slug,
+                        'label' => isset($vertical_row['label']) && '' !== (string) $vertical_row['label'] ? (string) $vertical_row['label'] : ucwords(str_replace('-', ' ', $slug)),
+                        'summary' => MadExtra_Directory_Data::inventory_summary($slug),
+                        'latest_job' => MadExtra_Directory_Data::latest_completed_job($slug),
+                    );
+                }
+            }
+            $cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
             ?>
             <div class="wrap">
                 <h1><?php esc_html_e('Directory Imports', 'madextra-citations'); ?></h1>
                 <p><?php esc_html_e('Upload large vertical snapshots, process them in background jobs, and track inserts, updates, deactivations, and row-level errors.', 'madextra-citations'); ?></p>
+                <?php if ($cron_disabled) : ?>
+                    <div class="notice notice-warning inline"><p><?php esc_html_e('WP-Cron is disabled on this site. Background page generation and import batches require a real cron hitting wp-cron.php, or manual retries.', 'madextra-citations'); ?></p></div>
+                <?php endif; ?>
+
+                <hr>
+                <h2><?php esc_html_e('Directory Snapshot Health', 'madextra-citations'); ?></h2>
+                <p><?php esc_html_e('Uploaded listings are stored in custom plugin tables, not in normal Pages or Posts screens. Use this table to verify row counts and queue basic profile pages.', 'madextra-citations'); ?></p>
+                <table class="widefat striped">
+                    <thead>
+                    <tr>
+                        <th><?php esc_html_e('Vertical', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Total Rows', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Active Rows', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Linked Profiles', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Public Pages', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Active Missing Pages', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Latest Completed Job', 'madextra-citations'); ?></th>
+                        <th><?php esc_html_e('Actions', 'madextra-citations'); ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (!$snapshot_rows) : ?>
+                        <tr><td colspan="8"><?php esc_html_e('No snapshot metrics available yet. Upload a vertical CSV snapshot first.', 'madextra-citations'); ?></td></tr>
+                    <?php else : ?>
+                        <?php foreach ($snapshot_rows as $snapshot_row) : ?>
+                            <?php
+                            $summary = isset($snapshot_row['summary']) && is_array($snapshot_row['summary']) ? $snapshot_row['summary'] : array();
+                            $latest_job = isset($snapshot_row['latest_job']) && is_array($snapshot_row['latest_job']) ? $snapshot_row['latest_job'] : array();
+                            $job_label = __('None', 'madextra-citations');
+                            if (!empty($latest_job['id'])) {
+                                $job_label = '#' . (int) $latest_job['id'];
+                                if (!empty($latest_job['updated_at'])) {
+                                    $job_label .= ' (' . $latest_job['updated_at'] . ')';
+                                }
+                            }
+                            ?>
+                            <tr>
+                                <td><strong><?php echo esc_html(isset($snapshot_row['label']) ? $snapshot_row['label'] : ''); ?></strong><div><code><?php echo esc_html(isset($snapshot_row['slug']) ? $snapshot_row['slug'] : ''); ?></code></div></td>
+                                <td><?php echo esc_html(number_format_i18n(isset($summary['total_rows']) ? (int) $summary['total_rows'] : 0)); ?></td>
+                                <td><?php echo esc_html(number_format_i18n(isset($summary['active_rows']) ? (int) $summary['active_rows'] : 0)); ?></td>
+                                <td><?php echo esc_html(number_format_i18n(isset($summary['linked_profiles']) ? (int) $summary['linked_profiles'] : 0)); ?></td>
+                                <td><?php echo esc_html(number_format_i18n(isset($summary['public_pages']) ? (int) $summary['public_pages'] : 0)); ?></td>
+                                <td><?php echo esc_html(number_format_i18n(isset($summary['active_missing_pages']) ? (int) $summary['active_missing_pages'] : 0)); ?></td>
+                                <td><?php echo esc_html($job_label); ?></td>
+                                <td>
+                                    <a href="<?php echo esc_url(self::queue_business_pages_url(isset($snapshot_row['slug']) ? $snapshot_row['slug'] : '')); ?>"><?php esc_html_e('Queue Basic Pages', 'madextra-citations'); ?></a>
+                                    |
+                                    <a href="<?php echo esc_url(self::restore_active_snapshot_url(isset($snapshot_row['slug']) ? $snapshot_row['slug'] : '')); ?>" onclick="return confirm('<?php echo esc_js(__('Restore active rows from the latest completed snapshot for this vertical?', 'madextra-citations')); ?>');"><?php esc_html_e('Restore Active Snapshot', 'madextra-citations'); ?></a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
 
                 <hr>
                 <h2><?php esc_html_e('Upload Vertical Snapshot', 'madextra-citations'); ?></h2>
@@ -3405,6 +3499,82 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                 );
             }
             fclose($out);
+            exit;
+        }
+
+        public static function handle_queue_business_pages()
+        {
+            if (!self::can_import_profiles()) {
+                wp_die(esc_html__('You do not have permission to queue page generation.', 'madextra-citations'));
+            }
+
+            $vertical_slug = isset($_GET['vertical']) ? sanitize_title(wp_unslash($_GET['vertical'])) : '';
+            check_admin_referer('mec_queue_business_pages_' . $vertical_slug);
+
+            if (!class_exists('MadExtra_Directory_Data')) {
+                self::queue_notice(__('Directory data helper is not available.', 'madextra-citations'), 'error');
+                wp_safe_redirect(self::tools_page_url());
+                exit;
+            }
+
+            if ('' === $vertical_slug && !self::has_admin_fallback()) {
+                self::queue_notice(__('Choose a vertical before queueing page generation.', 'madextra-citations'), 'warning');
+                wp_safe_redirect(self::tools_page_url());
+                exit;
+            }
+
+            self::schedule_business_page_generation_for_vertical($vertical_slug);
+            // Run one small batch immediately so admins see progress even when WP-Cron is delayed.
+            self::handle_generate_business_pages_batch($vertical_slug, 0, 20);
+
+            if ('' === $vertical_slug) {
+                self::queue_notice(__('Queued basic public profile generation for all active listings.', 'madextra-citations'), 'success');
+            } else {
+                self::queue_notice(sprintf(__('Queued basic public profile generation for %s.', 'madextra-citations'), ucwords(str_replace('-', ' ', $vertical_slug))), 'success');
+            }
+
+            wp_safe_redirect(self::tools_page_url(array('vertical' => $vertical_slug)));
+            exit;
+        }
+
+        public static function handle_restore_active_snapshot()
+        {
+            if (!self::can_import_profiles()) {
+                wp_die(esc_html__('You do not have permission to restore active snapshots.', 'madextra-citations'));
+            }
+
+            $vertical_slug = isset($_GET['vertical']) ? sanitize_title(wp_unslash($_GET['vertical'])) : '';
+            check_admin_referer('mec_restore_active_snapshot_' . $vertical_slug);
+
+            if ('' === $vertical_slug) {
+                self::queue_notice(__('Choose a vertical before restoring active listings.', 'madextra-citations'), 'warning');
+                wp_safe_redirect(self::tools_page_url());
+                exit;
+            }
+
+            if (!class_exists('MadExtra_Directory_Data')) {
+                self::queue_notice(__('Directory data helper is not available.', 'madextra-citations'), 'error');
+                wp_safe_redirect(self::tools_page_url(array('vertical' => $vertical_slug)));
+                exit;
+            }
+
+            $restore = MadExtra_Directory_Data::restore_active_snapshot_from_latest_job($vertical_slug);
+            if (is_wp_error($restore)) {
+                self::queue_notice($restore->get_error_message(), 'error');
+                wp_safe_redirect(self::tools_page_url(array('vertical' => $vertical_slug)));
+                exit;
+            }
+
+            self::schedule_business_page_generation_for_vertical($vertical_slug);
+            self::queue_notice(
+                sprintf(
+                    __('Restored active listings for %1$s from job #%2$d.', 'madextra-citations'),
+                    ucwords(str_replace('-', ' ', $vertical_slug)),
+                    (int) $restore['job_id']
+                ),
+                'success'
+            );
+            wp_safe_redirect(self::tools_page_url(array('vertical' => $vertical_slug)));
             exit;
         }
 
@@ -3939,6 +4109,46 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
 
             wp_safe_redirect($url);
             exit;
+        }
+
+        private static function tools_page_url(array $args = array())
+        {
+            $base = add_query_arg(
+                array(
+                    'post_type' => self::CPT,
+                    'page' => 'mec-csv-tools',
+                ),
+                admin_url('edit.php')
+            );
+            if (!$args) {
+                return $base;
+            }
+            return add_query_arg($args, $base);
+        }
+
+        private static function queue_business_pages_url($vertical_slug = '')
+        {
+            $url = add_query_arg(
+                array(
+                    'action' => 'mec_queue_business_pages',
+                    'vertical' => sanitize_title((string) $vertical_slug),
+                ),
+                admin_url('admin-post.php')
+            );
+            return wp_nonce_url($url, 'mec_queue_business_pages_' . sanitize_title((string) $vertical_slug));
+        }
+
+        private static function restore_active_snapshot_url($vertical_slug = '')
+        {
+            $vertical_slug = sanitize_title((string) $vertical_slug);
+            $url = add_query_arg(
+                array(
+                    'action' => 'mec_restore_active_snapshot',
+                    'vertical' => $vertical_slug,
+                ),
+                admin_url('admin-post.php')
+            );
+            return wp_nonce_url($url, 'mec_restore_active_snapshot_' . $vertical_slug);
         }
 
         public static function maybe_redirect_legacy_tools_page()
@@ -4762,6 +4972,24 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             }
 
             return 'basic';
+        }
+
+        public static function outbound_link_rel_for_listing($listing_state, $link_type = 'external')
+        {
+            $state = strtolower(trim((string) $listing_state));
+            $is_premium = ('premium' === $state);
+            $type = strtolower(trim((string) $link_type));
+            $is_claim_payment = in_array($type, array('claim_payment', 'payment', 'claim'), true);
+
+            if ($is_premium) {
+                return 'noopener';
+            }
+
+            if ($is_claim_payment) {
+                return 'nofollow noopener sponsored';
+            }
+
+            return 'nofollow noopener';
         }
 
         private static function business_to_profile_payload(array $business)
@@ -5591,6 +5819,9 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
             $primary_name = self::profile_primary_name($profile);
             $is_premium = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'];
             $is_claimed = $is_premium || ('paid' === (string) get_post_meta($post_id, self::META_PREFIX . 'self_serve_payment_status', true));
+            $listing_state = $is_premium ? 'premium' : 'claimed';
+            $outbound_rel = self::outbound_link_rel_for_listing($listing_state);
+            $payment_rel = self::outbound_link_rel_for_listing($listing_state, 'claim_payment');
             $hero_title = $is_premium && !empty($profile['premium_hero_text']) ? $profile['premium_hero_text'] : $primary_name;
             $hero_subheadline = $is_premium && !empty($profile['premium_subheadline']) ? $profile['premium_subheadline'] : $services;
             $service_areas = self::split_multiline_items(isset($profile['service_areas']) ? $profile['service_areas'] : '');
@@ -5642,10 +5873,10 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         </div>
                     </div>
                     <div class="mec-public-actions">
-                        <?php if ($is_premium && !empty($profile['primary_cta_url'])) : ?><a class="mec-public-button" href="<?php echo esc_url($profile['primary_cta_url']); ?>" target="_blank" rel="noopener"><?php echo esc_html($primary_cta_label); ?></a><?php endif; ?>
-                        <?php if ($is_premium && !empty($profile['secondary_cta_url'])) : ?><a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($profile['secondary_cta_url']); ?>" target="_blank" rel="noopener"><?php echo esc_html($secondary_cta_label); ?></a><?php endif; ?>
-                        <?php if ((!$is_premium || empty($profile['secondary_cta_url'])) && !empty($profile['business_website_url'])) : ?><a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Visit Website', 'madextra-citations'); ?></a><?php endif; ?>
-                        <?php if ($cta_enabled) : ?><a class="mec-public-button" href="<?php echo esc_url($payment_url); ?>" target="_blank" rel="noopener sponsored"><?php echo esc_html($cta_label); ?></a><?php endif; ?>
+                        <?php if ($is_premium && !empty($profile['primary_cta_url'])) : ?><a class="mec-public-button" href="<?php echo esc_url($profile['primary_cta_url']); ?>" target="_blank" rel="<?php echo esc_attr($outbound_rel); ?>"><?php echo esc_html($primary_cta_label); ?></a><?php endif; ?>
+                        <?php if ($is_premium && !empty($profile['secondary_cta_url'])) : ?><a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($profile['secondary_cta_url']); ?>" target="_blank" rel="<?php echo esc_attr($outbound_rel); ?>"><?php echo esc_html($secondary_cta_label); ?></a><?php endif; ?>
+                        <?php if ((!$is_premium || empty($profile['secondary_cta_url'])) && !empty($profile['business_website_url'])) : ?><a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="<?php echo esc_attr($outbound_rel); ?>"><?php esc_html_e('Visit Website', 'madextra-citations'); ?></a><?php endif; ?>
+                        <?php if ($cta_enabled) : ?><a class="mec-public-button" href="<?php echo esc_url($payment_url); ?>" target="_blank" rel="<?php echo esc_attr($payment_rel); ?>"><?php echo esc_html($cta_label); ?></a><?php endif; ?>
                     </div>
                 </section>
 
@@ -5654,7 +5885,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                         <h3><?php esc_html_e('Quick Links', 'madextra-citations'); ?></h3>
                         <div class="mec-link-row">
                             <?php foreach ($deep_links as $label => $url) : ?>
-                                <a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php echo esc_html($label); ?></a>
+                                <a class="mec-public-button mec-public-button-secondary" href="<?php echo esc_url($url); ?>" target="_blank" rel="<?php echo esc_attr($outbound_rel); ?>"><?php echo esc_html($label); ?></a>
                             <?php endforeach; ?>
                         </div>
                     </section>
@@ -5713,7 +5944,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                 <ul class="mec-public-list">
                                     <?php foreach ($social_links as $social_link) : ?>
                                         <?php if (empty($social_link[1])) { continue; } ?>
-                                        <li><a href="<?php echo esc_url($social_link[1]); ?>" target="_blank" rel="noopener"><?php echo esc_html($social_link[0] ? $social_link[0] : $social_link[1]); ?></a></li>
+                                        <li><a href="<?php echo esc_url($social_link[1]); ?>" target="_blank" rel="<?php echo esc_attr($outbound_rel); ?>"><?php echo esc_html($social_link[0] ? $social_link[0] : $social_link[1]); ?></a></li>
                                     <?php endforeach; ?>
                                 </ul>
                             </article>
@@ -5755,7 +5986,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                             <p><?php esc_html_e('This self-service profile is gated behind Stripe checkout.', 'madextra-citations'); ?></p>
                             <?php if (!empty($profile['self_serve_price_text'])) : ?><p class="mec-paywall-price"><?php echo esc_html($profile['self_serve_price_text']); ?></p><?php endif; ?>
                         </div>
-                        <a class="mec-public-button" href="<?php echo esc_url($payment_url); ?>" target="_blank" rel="noopener sponsored"><?php echo esc_html($cta_label); ?></a>
+                        <a class="mec-public-button" href="<?php echo esc_url($payment_url); ?>" target="_blank" rel="<?php echo esc_attr($payment_rel); ?>"><?php echo esc_html($cta_label); ?></a>
                     </section>
                 <?php endif; ?>
             </div>
@@ -6251,6 +6482,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                 <h3><?php esc_html_e('Featured Premium Listings', 'madextra-citations'); ?></h3>
                                 <div class="mec-featured-grid">
                                     <?php foreach ($featured_cards as $card) : ?>
+                                        <?php $card_outbound_rel = self::outbound_link_rel_for_listing(isset($card['listing_state']) ? $card['listing_state'] : 'basic'); ?>
                                         <article class="mec-featured-card">
                                             <div class="mec-featured-top">
                                                 <?php if (!empty($card['logo_url'])) : ?>
@@ -6266,8 +6498,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                             <?php if (!empty($card['display_address'])) : ?><p><?php echo esc_html($card['display_address']); ?></p><?php endif; ?>
                                             <div class="mec-link-row">
                                                 <?php if (!empty($card['public_page_url'])) : ?><a href="<?php echo esc_url($card['public_page_url']); ?>"><?php esc_html_e('View Profile', 'madextra-citations'); ?></a><?php endif; ?>
-                                                <?php if (!empty($card['website_url'])) : ?><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
-                                                <?php if (!empty($card['deep_links']['booking'])) : ?><a href="<?php echo esc_url($card['deep_links']['booking']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Book', 'madextra-citations'); ?></a><?php endif; ?>
+                                                <?php if (!empty($card['website_url'])) : ?><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="<?php echo esc_attr($card_outbound_rel); ?>"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
+                                                <?php if (!empty($card['deep_links']['booking'])) : ?><a href="<?php echo esc_url($card['deep_links']['booking']); ?>" target="_blank" rel="<?php echo esc_attr($card_outbound_rel); ?>"><?php esc_html_e('Book', 'madextra-citations'); ?></a><?php endif; ?>
                                             </div>
                                         </article>
                                     <?php endforeach; ?>
@@ -6298,6 +6530,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                     if (!in_array($listing_state, array('basic', 'claimed', 'premium'), true)) {
                                         $listing_state = 'basic';
                                     }
+                                    $card_outbound_rel = self::outbound_link_rel_for_listing($listing_state);
+                                    $claim_payment_rel = self::outbound_link_rel_for_listing($listing_state, 'claim_payment');
                                     if (!empty($card['id']) && class_exists('MadExtra_Directory_Data')) {
                                         $business_row = MadExtra_Directory_Data::get_business((int) $card['id']);
                                         $claim_url = $business_row ? self::build_business_payment_url($business_row) : '';
@@ -6375,7 +6609,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                         <td>
                                             <?php if (!empty($card['phone'])) : ?><div><?php echo esc_html($card['phone']); ?></div><?php endif; ?>
                                             <?php if (!empty($card['email'])) : ?><div><a href="mailto:<?php echo esc_attr($card['email']); ?>"><?php echo esc_html($card['email']); ?></a></div><?php endif; ?>
-                                            <?php if (!empty($card['website_url'])) : ?><div><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="noopener"><?php echo esc_html(preg_replace('#^https?://#', '', $card['website_url'])); ?></a></div><?php endif; ?>
+                                            <?php if (!empty($card['website_url'])) : ?><div><a href="<?php echo esc_url($card['website_url']); ?>" target="_blank" rel="<?php echo esc_attr($card_outbound_rel); ?>"><?php echo esc_html(preg_replace('#^https?://#', '', $card['website_url'])); ?></a></div><?php endif; ?>
                                         </td>
                                         <td>
                                             <div class="mec-link-row">
@@ -6383,7 +6617,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                                     <a href="<?php echo esc_url($card['public_page_url']); ?>"><?php esc_html_e('View Profile', 'madextra-citations'); ?></a>
                                                 <?php endif; ?>
                                                 <?php if ('basic' === $listing_state && !empty($claim_url)) : ?>
-                                                    <a href="<?php echo esc_url($claim_url); ?>" target="_blank" rel="noopener sponsored"><?php esc_html_e('Claim Profile', 'madextra-citations'); ?></a>
+                                                    <a href="<?php echo esc_url($claim_url); ?>" target="_blank" rel="<?php echo esc_attr($claim_payment_rel); ?>"><?php esc_html_e('Claim Profile', 'madextra-citations'); ?></a>
                                                 <?php elseif ('basic' === $listing_state) : ?>
                                                     <a href="<?php echo esc_url($join_url); ?>"><?php esc_html_e('Get Premium', 'madextra-citations'); ?></a>
                                                 <?php elseif ('claimed' === $listing_state) : ?>
@@ -6564,6 +6798,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                     $status_key = strtolower((string) $profile['status']);
                                     $status_label = isset($status_options[$profile['status']]) ? $status_options[$profile['status']] : $profile['status'];
                                     $search_blob = self::profile_search_blob($profile, $services, $status_label);
+                                    $profile_listing_state = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'] ? 'premium' : 'claimed';
+                                    $profile_outbound_rel = self::outbound_link_rel_for_listing($profile_listing_state);
                                     ?>
                                     <article
                                         class="mec-featured-card"
@@ -6598,7 +6834,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                             <?php if (!empty($profile['business_hours'])) : ?><span><?php echo nl2br(esc_html($profile['business_hours'])); ?></span><?php endif; ?>
                                         </div>
                                         <div class="mec-link-row">
-                                            <?php if (!empty($profile['business_website_url'])) : ?><a href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
+                                            <?php if (!empty($profile['business_website_url'])) : ?><a href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="<?php echo esc_attr($profile_outbound_rel); ?>"><?php esc_html_e('Website', 'madextra-citations'); ?></a><?php endif; ?>
                                             <?php if (!empty($profile['public_profile_page_url'])) : ?><a href="<?php echo esc_url($profile['public_profile_page_url']); ?>"><?php esc_html_e('Profile', 'madextra-citations'); ?></a><?php endif; ?>
                                         </div>
                                     </article>
@@ -6629,6 +6865,8 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                     $status_label = isset($status_options[$profile['status']]) ? $status_options[$profile['status']] : $profile['status'];
                                     $search_blob = self::profile_search_blob($profile, $services, $status_label);
                                     $page_number = (int) floor($index / $per_page) + 1;
+                                    $profile_listing_state = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'] ? 'premium' : 'claimed';
+                                    $profile_outbound_rel = self::outbound_link_rel_for_listing($profile_listing_state);
                                     ?>
                                     <tr
                                         data-mec-item="1"
@@ -6656,7 +6894,7 @@ if (!class_exists('MadExtra_Citations_Plugin')) {
                                         <td><?php echo esc_html($profile['last_verified_date'] ? $profile['last_verified_date'] : '-'); ?></td>
                                         <td>
                                             <?php if (!empty($profile['business_website_url'])) : ?>
-                                                <a href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Website', 'madextra-citations'); ?></a>
+                                                <a href="<?php echo esc_url($profile['business_website_url']); ?>" target="_blank" rel="<?php echo esc_attr($profile_outbound_rel); ?>"><?php esc_html_e('Website', 'madextra-citations'); ?></a>
                                             <?php endif; ?>
                                             <?php if (!empty($profile['public_profile_page_url'])) : ?>
                                                 <a href="<?php echo esc_url($profile['public_profile_page_url']); ?>"><?php esc_html_e('Profile', 'madextra-citations'); ?></a>

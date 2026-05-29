@@ -2888,7 +2888,9 @@ if (!class_exists('MadExtra_Citations_Builder')) {
                 if (empty($profile['business_website_url'])) {
                     return '-';
                 }
-                return '<a href="' . esc_url($profile['business_website_url']) . '" target="_blank" rel="noopener">' . esc_html__('Website', 'madextra-citations') . '</a>';
+                $listing_state = !empty($profile['is_premium']) && '1' === (string) $profile['is_premium'] ? 'premium' : 'claimed';
+                $rel = MadExtra_Citations_Plugin::outbound_link_rel_for_listing($listing_state);
+                return '<a href="' . esc_url($profile['business_website_url']) . '" target="_blank" rel="' . esc_attr($rel) . '">' . esc_html__('Website', 'madextra-citations') . '</a>';
             }
             if ('public_profile_page_url' === $field_key) {
                 if (empty($profile['public_profile_page_url'])) {

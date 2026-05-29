@@ -511,6 +511,107 @@ if (!class_exists('MadExtra_Directory_Data')) {
             return $wpdb->get_results($sql, ARRAY_A);
         }
 
+        public static function latest_completed_job($vertical_slug = '')
+        {
+            global $wpdb;
+            $table = self::table('mec_directory_import_jobs');
+            $where = array("status = 'completed'");
+            $params = array();
+
+            $vertical_slug = self::normalize_vertical_slug($vertical_slug);
+            if ('' !== $vertical_slug) {
+                $where[] = 'vertical_slug = %s';
+                $params[] = $vertical_slug;
+            }
+
+            $sql = "SELECT * FROM {$table} WHERE " . implode(' AND ', $where) . ' ORDER BY id DESC LIMIT 1';
+            if ($params) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            $row = $wpdb->get_row($sql, ARRAY_A);
+            return is_array($row) ? $row : array();
+        }
+
+        public static function inventory_summary($vertical_slug = '')
+        {
+            global $wpdb;
+            $table = self::table('mec_directory_businesses');
+            $where = '1=1';
+            $params = array();
+
+            $vertical_slug = self::normalize_vertical_slug($vertical_slug);
+            if ('' !== $vertical_slug) {
+                $where .= ' AND vertical_slug = %s';
+                $params[] = $vertical_slug;
+            }
+
+            $sql = "SELECT
+                        COUNT(*) AS total_rows,
+                        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_rows,
+                        SUM(CASE WHEN linked_profile_id > 0 THEN 1 ELSE 0 END) AS linked_profiles,
+                        SUM(CASE WHEN public_page_id > 0 THEN 1 ELSE 0 END) AS public_pages,
+                        SUM(CASE WHEN is_active = 1 AND public_page_id = 0 THEN 1 ELSE 0 END) AS active_missing_pages
+                    FROM {$table}
+                    WHERE {$where}";
+            if ($params) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            $row = $wpdb->get_row($sql, ARRAY_A);
+            if (!is_array($row)) {
+                $row = array();
+            }
+
+            return array(
+                'total_rows' => isset($row['total_rows']) ? (int) $row['total_rows'] : 0,
+                'active_rows' => isset($row['active_rows']) ? (int) $row['active_rows'] : 0,
+                'linked_profiles' => isset($row['linked_profiles']) ? (int) $row['linked_profiles'] : 0,
+                'public_pages' => isset($row['public_pages']) ? (int) $row['public_pages'] : 0,
+                'active_missing_pages' => isset($row['active_missing_pages']) ? (int) $row['active_missing_pages'] : 0,
+            );
+        }
+
+        public static function restore_active_snapshot_from_latest_job($vertical_slug)
+        {
+            global $wpdb;
+            $vertical_slug = self::normalize_vertical_slug($vertical_slug);
+            if ('' === $vertical_slug) {
+                return new WP_Error('missing_vertical', __('Choose a vertical before restoring active records.', 'madextra-citations'));
+            }
+
+            $job = self::latest_completed_job($vertical_slug);
+            if (!$job) {
+                return new WP_Error('missing_job', __('No completed import job found for this vertical.', 'madextra-citations'));
+            }
+
+            $job_id = (int) $job['id'];
+            $inserted_count = isset($job['inserted_count']) ? (int) $job['inserted_count'] : 0;
+            $updated_count = isset($job['updated_count']) ? (int) $job['updated_count'] : 0;
+            if (($inserted_count + $updated_count) <= 0) {
+                return new WP_Error('empty_snapshot', __('Latest completed job has no successful inserts or updates. Upload a valid snapshot first.', 'madextra-citations'));
+            }
+
+            $table = self::table('mec_directory_businesses');
+            $now = current_time('mysql');
+            $affected = $wpdb->query(
+                $wpdb->prepare(
+                    "UPDATE {$table}
+                        SET is_active = CASE WHEN last_seen_job_id = %d THEN 1 ELSE 0 END,
+                            updated_at = %s
+                      WHERE vertical_slug = %s",
+                    $job_id,
+                    $now,
+                    $vertical_slug
+                )
+            );
+
+            return array(
+                'job_id' => $job_id,
+                'affected' => max(0, (int) $affected),
+            );
+        }
+
         public static function retry_job($job_id)
         {
             global $wpdb;

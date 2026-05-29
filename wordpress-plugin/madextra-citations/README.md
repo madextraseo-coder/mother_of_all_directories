@@ -16,19 +16,48 @@ Preferred public pages:
 
 - `/directory/` -> `[madextra_directory]`
 - `/join-directory/` -> `[mec_join_directory_form]` (alias of public submit)
-- `/payment-complete/` -> `[mec_payment_complete]`
-
-Preferred shortcodes:
-
-- `[madextra_directory]`
-- `[mec_join_directory_form]`
-- `[mec_public_profile id="123"]`
-- `[madextra_directory_home]`
+- `/payment-complete/` -> `[mec_stripe_return]`
 
 Compatibility aliases still supported:
 
-- `[madextra_citations_directory]`
+- `[madextra_citations_directory]` (alias of `[madextra_directory]`)
 - legacy `/citations/` and `/submit-citation/` paths redirect where possible
+
+## Complete Shortcode Reference
+
+- `[madextra_directory]`
+  - Main public directory renderer (table/listing surface for premium upgrades).
+- `[madextra_citations_directory]`
+  - Backward-compatible alias of `[madextra_directory]`.
+- `[mec_join_directory_form]`
+  - Public join/claim form (alias of public submit form).
+- `[mec_public_submit_form]`
+  - Public citation/directory profile submission form.
+- `[mec_public_profile id="123"]`
+  - Public profile page renderer for a specific profile post ID.
+- `[mec_stripe_return]`
+  - Payment return/confirmation handler page shortcode.
+- `[madextra_directory_home]`
+  - Sales/marketing homepage block for directory owner campaigns.
+- `[mec_listing template="default-table" query="all-profiles"]`
+  - Builder-driven listing renderer (table or card style based on template).
+- `[mec_filters query="all-profiles"]`
+  - Builder-driven filter UI that can target listing pages.
+- `[mec_profile_dashboard]`
+  - Frontend profile dashboard for authorized users.
+
+Shortcode examples:
+
+- Table of current listings (default all verticals/cities):
+  - `[madextra_directory show_filters="yes" per_page="25"]`
+- Table of listings for one vertical (good for separate subdomains):
+  - `[madextra_directory vertical="medical-spas" show_filters="yes" per_page="25"]`
+- Legacy per-city paging attribute support:
+  - `[madextra_directory show_filters="yes" per_city="25"]`
+- Builder table tied to a query preset:
+  - `[mec_listing template="default-table" query="all-profiles" per_page="25" show_filters="1"]`
+- Builder filter bar on the same page:
+  - `[mec_filters query="all-profiles" include_market="1"]`
 
 ## Multi-Vertical Architecture
 
